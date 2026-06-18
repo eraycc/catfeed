@@ -1,0 +1,110 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  passwordHash String      @map("password_hash")
+  name         String
+  role         UserRole    @default(USER)
+  avatarUrl    String?     @map("avatar_url")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+  feedLogs     FeedLog[]
+
+  @@map("users")
+}
+
+model Community {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  location    String?
+  coverImage  String?     @map("cover_image")
+  isActive    Boolean     @default(true) @map("is_active")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  cameras     Camera[]
+  feeders     Feeder[]
+
+  @@map("communities")
+}
+
+model Camera {
+  id          String       @id @default(cuid())
+  communityId String       @map("community_id")
+  community   Community    @relation(fields: [communityId], references: [id])
+  name        String
+  streamUrl   String       @map("stream_url")
+  status      CameraStatus @default(OFFLINE)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  feedLogs    FeedLog[]
+
+  @@map("cameras")
+}
+
+model Feeder {
+  id          String        @id @default(cuid())
+  communityId String        @map("community_id")
+  community   Community     @relation(fields: [communityId], references: [id])
+  name        String
+  type        FeederType    @default(SIMULATED)
+  status      FeederStatus  @default(OFFLINE)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  feedLogs    FeedLog[]
+
+  @@map("feeders")
+}
+
+model FeedLog {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  cameraId  String   @map("camera_id")
+  camera    Camera   @relation(fields: [cameraId], references: [id])
+  feederId  String   @map("feeder_id")
+  feeder    Feeder   @relation(fields: [feederId], references: [id])
+  amount    Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("feed_logs")
+}
+
+model AdminSetting {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("admin_settings")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum CameraStatus {
+  ONLINE
+  OFFLINE
+  MAINTENANCE
+}
+
+enum FeederStatus {
+  ONLINE
+  OFFLINE
+  MAINTENANCE
+}
+
+enum FeederType {
+  SIMULATED
+  REAL
+}
