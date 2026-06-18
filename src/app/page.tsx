@@ -5,23 +5,25 @@ import { CommunityCard } from "@/components/CommunityCard"
 export const dynamic = 'force-dynamic'
 
 async function ensureInit() {
-  const count = await db.community.count()
-  if (count > 0) return
+  const communityCount = await db.community.count()
+  if (communityCount > 0) return
 
+  // 只在管理员不存在时创建
   const adminEmail = process.env.ADMIN_EMAIL || "admin@example.com"
   const adminPassword = process.env.ADMIN_PASSWORD || "admin123456"
-
-  const bcrypt = await import("bcryptjs")
-  const passwordHash = await bcrypt.hash(adminPassword, 12)
 
   const existingAdmin = await db.adminSetting.findUnique({
     where: { email: adminEmail },
   })
 
   if (!existingAdmin) {
+    const bcrypt = await import("bcryptjs")
+    const passwordHash = await bcrypt.hash(adminPassword, 12)
+
     await db.adminSetting.create({
       data: { email: adminEmail, passwordHash },
     })
+
     const existingUser = await db.user.findUnique({
       where: { email: adminEmail },
     })
@@ -37,6 +39,7 @@ async function ensureInit() {
     }
   }
 
+  // 创建种子数据
   const c1 = await db.community.create({
     data: {
       name: "阳光社区流浪猫救助站",
