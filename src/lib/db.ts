@@ -5,11 +5,12 @@ const globalForPrisma = globalThis as unknown as {
 }
 
 function createPrismaClient() {
+  const url = process.env.DATABASE_URL
   return new PrismaClient({
     log: process.env.NODE_ENV === "development" ? ["query"] : [],
     datasources: {
       db: {
-        url: process.env.DATABASE_URL,
+        url: url?.includes("?") ? `${url}&pgbouncer=true` : `${url}?pgbouncer=true`,
       },
     },
   })
