@@ -1,26 +1,12 @@
 import { db } from "@/lib/db"
+import { initializeDatabase } from "@/lib/init"
 import { Header } from "@/components/Header"
 import { CommunityCard } from "@/components/CommunityCard"
 
 export const dynamic = 'force-dynamic'
 
-async function ensureInit() {
-  const communityCount = await db.community.count()
-  if (communityCount > 0) return
-
-  // 数据库未初始化，调用初始化 API
-  try {
-    await fetch(new URL("/api/init", process.env.NEXTAUTH_URL || "http://localhost:3000"), {
-      method: "POST",
-      cache: "no-store",
-    })
-  } catch (e) {
-    console.error("Init failed:", e)
-  }
-}
-
 export default async function HomePage() {
-  await ensureInit()
+  await initializeDatabase()
 
   const communities = await db.community.findMany({
     where: { isActive: true },
