@@ -13,6 +13,17 @@ export async function POST(req: Request) {
       )
     }
 
+    const currentUser = await db.user.findUnique({
+      where: { id: session.user.id },
+    })
+
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: "用户不存在，请重新登录" },
+        { status: 401 }
+      )
+    }
+
     const { cameraId, feederId } = await req.json()
 
     if (!cameraId || !feederId) {
