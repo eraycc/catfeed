@@ -124,7 +124,7 @@ export default function FeedLogsPage() {
         onSelectionChange={setSelectedIds}
       />
 
-      <div className="flex items-center justify-between mt-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-4 gap-3">
         <div className="flex items-center gap-2 text-sm">
           <span>每页</span>
           <select
@@ -139,25 +139,15 @@ export default function FeedLogsPage() {
           <span>条</span>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page <= 1}
-            onClick={() => setPage(1)}
-          >
+        <div className="flex items-center gap-1 flex-wrap">
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(1)}>
             首页
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page <= 1}
-            onClick={() => setPage(page - 1)}
-          >
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
             上一页
           </Button>
           <div className="flex items-center gap-1 text-sm">
-            <span>第</span>
+            <span className="hidden sm:inline">第</span>
             <input
               type="number"
               min={1}
@@ -169,22 +159,12 @@ export default function FeedLogsPage() {
               }}
               className="w-12 h-8 rounded-md border border-input bg-transparent px-1 text-center text-sm"
             />
-            <span>页</span>
+            <span className="hidden sm:inline">页</span>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page >= totalPages}
-            onClick={() => setPage(page + 1)}
-          >
+          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
             下一页
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page >= totalPages}
-            onClick={() => setPage(totalPages)}
-          >
+          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(totalPages)}>
             末页
           </Button>
         </div>
