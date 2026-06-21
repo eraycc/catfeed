@@ -5,11 +5,10 @@ export async function initializeDatabase() {
 
   try {
     await db.community.count()
-  } catch {
+  } catch (error) {
+    console.log("Tables do not exist, creating...")
     try {
-      const { PrismaClient } = await import("@prisma/client")
-      const prisma = new PrismaClient()
-      await prisma.$executeRawUnsafe(`
+      await db.$executeRawUnsafe(`
         CREATE TABLE IF NOT EXISTS communities (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
@@ -71,11 +70,10 @@ export async function initializeDatabase() {
         CREATE INDEX IF NOT EXISTS idx_feed_logs_camera_id ON feed_logs(camera_id);
         CREATE INDEX IF NOT EXISTS idx_feed_logs_created_at ON feed_logs(created_at);
       `)
-      await prisma.$disconnect()
       results.push("Database tables created")
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to create tables:", e)
-      throw new Error("Database initialization failed: tables could not be created")
+      throw new Error(`Database initialization failed: ${e.message}`)
     }
   }
 
