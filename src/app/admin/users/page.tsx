@@ -58,7 +58,7 @@ export default function UsersPage() {
     },
   ]
 
-  const handleSubmit = async (formData: Record<string, any>) => {
+  const handleSubmit = async (formData: Record<string, string | number | boolean | null>) => {
     const url = editing
       ? `/api/admin/users/${editing.id}`
       : "/api/admin/users"
@@ -177,7 +177,12 @@ export default function UsersPage() {
         onOpenChange={setDialogOpen}
         title={editing ? "编辑用户" : "添加用户"}
         fields={formFields}
-        initialData={editing ? { ...editing, isActive: String(editing.isActive) } : undefined}
+        initialData={editing ? {
+          name: editing.name,
+          email: editing.email,
+          role: editing.role,
+          isActive: String(editing.isActive),
+        } : undefined}
         onSubmit={handleSubmit}
       />
     </div>

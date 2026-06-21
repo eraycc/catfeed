@@ -33,6 +33,7 @@ model Community {
   updatedAt   DateTime    @updatedAt @map("updated_at")
   cameras     Camera[]
   feeders     Feeder[]
+  feedLogs    FeedLog[]
 
   @@map("communities")
 }
@@ -66,16 +67,21 @@ model Feeder {
 }
 
 model FeedLog {
-  id        String   @id @default(cuid())
-  userId    String   @map("user_id")
-  user      User     @relation(fields: [userId], references: [id])
-  cameraId  String   @map("camera_id")
-  camera    Camera   @relation(fields: [cameraId], references: [id])
-  feederId  String   @map("feeder_id")
-  feeder    Feeder   @relation(fields: [feederId], references: [id])
-  amount    Int      @default(1)
-  createdAt DateTime @default(now()) @map("created_at")
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  user        User     @relation(fields: [userId], references: [id])
+  communityId String   @map("community_id")
+  community   Community @relation(fields: [communityId], references: [id])
+  cameraId    String   @map("camera_id")
+  camera      Camera   @relation(fields: [cameraId], references: [id])
+  feederId    String   @map("feeder_id")
+  feeder      Feeder   @relation(fields: [feederId], references: [id])
+  amount      Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at")
 
+  @@index([userId])
+  @@index([communityId])
+  @@index([createdAt])
   @@map("feed_logs")
 }
 

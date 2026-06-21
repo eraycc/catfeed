@@ -60,7 +60,7 @@ export default function CamerasPage() {
     },
   ]
 
-  const handleSubmit = async (formData: Record<string, any>) => {
+  const handleSubmit = async (formData: Record<string, string | number | boolean | null>) => {
     const url = editing
       ? `/api/admin/cameras/${editing.id}`
       : "/api/admin/cameras"
@@ -121,7 +121,13 @@ export default function CamerasPage() {
         onOpenChange={setDialogOpen}
         title={editing ? "编辑摄像头" : "添加摄像头"}
         fields={formFields}
-        initialData={editing || undefined}
+        initialData={editing ? {
+          id: editing.id,
+          name: editing.name,
+          streamUrl: editing.streamUrl,
+          status: editing.status,
+          communityId: editing.communityId,
+        } : undefined}
         onSubmit={handleSubmit}
       />
     </div>

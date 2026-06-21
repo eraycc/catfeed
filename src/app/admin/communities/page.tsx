@@ -34,7 +34,7 @@ export default function CommunitiesPage() {
 
   useEffect(() => { fetchData() }, [])
 
-  const handleSubmit = async (formData: Record<string, any>) => {
+  const handleSubmit = async (formData: Record<string, string | number | boolean | null>) => {
     const url = editing
       ? `/api/admin/communities/${editing.id}`
       : "/api/admin/communities"
@@ -113,7 +113,11 @@ export default function CommunitiesPage() {
         onOpenChange={setDialogOpen}
         title={editing ? "编辑社区" : "添加社区"}
         fields={formFields}
-        initialData={editing || undefined}
+        initialData={editing ? {
+          name: editing.name,
+          description: editing.description || "",
+          location: editing.location || "",
+        } : undefined}
         onSubmit={handleSubmit}
       />
     </div>

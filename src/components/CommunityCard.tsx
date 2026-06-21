@@ -1,5 +1,7 @@
+"use client"
+
 import Link from "next/link"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 
 interface CommunityCardProps {
@@ -21,20 +23,29 @@ export function CommunityCard({
 }: CommunityCardProps) {
   return (
     <Link href={`/community/${id}`}>
-      <Card className="transition-shadow hover:shadow-md">
-        <CardHeader>
-          <CardTitle className="text-lg">{name}</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
+        <CardContent className="p-4">
+          <h3 className="font-semibold text-lg mb-2">{name}</h3>
           {description && (
-            <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+            <CardDescription className="mb-3 line-clamp-2">
               {description}
-            </p>
+            </CardDescription>
           )}
-          <div className="flex gap-2 flex-wrap">
-            {location && <Badge variant="secondary">{location}</Badge>}
-            <Badge variant="outline">{cameraCount} 个摄像头</Badge>
-            <Badge variant="outline">{feederCount} 个投喂器</Badge>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {location && (
+              <Badge variant="outline" className="text-xs">
+                📍 {location}
+              </Badge>
+            )}
+            <Badge variant="secondary" className="text-xs">
+              📹 {cameraCount} 个摄像头
+            </Badge>
+            <Badge variant="secondary" className="text-xs">
+              🍖 {feederCount} 个投喂器
+            </Badge>
+          </div>
+          <div className="text-sm text-primary font-medium">
+            点击进入 →
           </div>
         </CardContent>
       </Card>

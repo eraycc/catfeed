@@ -1,13 +1,5 @@
 "use client"
 
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 
 export interface Column<T> {
@@ -21,10 +13,9 @@ interface DataTableProps<T> {
   data: T[]
   onEdit?: (item: T) => void
   onDelete?: (item: T) => void
+  extraActions?: (item: T) => React.ReactNode
   selectedIds?: string[]
   onSelectionChange?: (ids: string[]) => void
-  idKey?: string
-  extraActions?: (item: T) => React.ReactNode
 }
 
 export function DataTable<T extends { id: string }>({
@@ -32,116 +23,78 @@ export function DataTable<T extends { id: string }>({
   data,
   onEdit,
   onDelete,
-  selectedIds,
-  onSelectionChange,
-  idKey = "id",
   extraActions,
 }: DataTableProps<T>) {
-  const allSelected = data.length > 0 && data.every((item) => selectedIds?.includes(item[idKey as keyof T] as string))
-  const someSelected = data.some((item) => selectedIds?.includes(item[idKey as keyof T] as string))
-
-  const toggleAll = () => {
-    if (!onSelectionChange) return
-    if (allSelected) {
-      onSelectionChange([])
-    } else {
-      onSelectionChange(data.map((item) => item[idKey as keyof T] as string))
-    }
-  }
-
-  const toggleOne = (id: string) => {
-    if (!onSelectionChange) return
-    if (selectedIds?.includes(id)) {
-      onSelectionChange(selectedIds.filter((i) => i !== id))
-    } else {
-      onSelectionChange([...(selectedIds || []), id])
-    }
-  }
-
   return (
     <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            {onSelectionChange && (
-              <TableHead className="w-12">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  ref={(el) => {
-                    if (el) el.indeterminate = someSelected && !allSelected
-                  }}
-                  onChange={toggleAll}
-                  className="h-4 w-4 rounded border-gray-300"
-                />
-              </TableHead>
-            )}
+      <table className="w-full">
+        <thead>
+          <tr className="border-b bg-muted/50">
             {columns.map((col) => (
-              <TableHead key={col.key}>{col.label}</TableHead>
+              <th
+                key={col.key}
+                className="h-10 px-4 text-left align-middle font-medium text-muted-foreground"
+              >
+                {col.label}
+              </th>
             ))}
             {(onEdit || onDelete || extraActions) && (
-              <TableHead className="text-right">操作</TableHead>
+              <th className="h-10 px-4 text-right align-middle font-medium text-muted-foreground">
+                操作
+              </th>
             )}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
+          </tr>
+        </thead>
+        <tbody>
           {data.length === 0 ? (
-            <TableRow>
-              <TableCell
-                colSpan={columns.length + (onSelectionChange ? 1 : 0) + (onEdit || onDelete || extraActions ? 1 : 0)}
-                className="text-center py-8 text-muted-foreground"
+            <tr>
+              <td
+                colSpan={columns.length + (onEdit || onDelete || extraActions ? 1 : 0)}
+                className="h-24 text-center text-muted-foreground"
               >
                 暂无数据
-              </TableCell>
-            </TableRow>
+              </td>
+            </tr>
           ) : (
             data.map((item) => (
-              <TableRow key={item.id}>
-                {onSelectionChange && (
-                  <TableCell>
-                    <input
-                      type="checkbox"
-                    checked={selectedIds?.includes(item[idKey as keyof T] as string) || false}
-                    onChange={() => toggleOne(item[idKey as keyof T] as string)}
-                      className="h-4 w-4 rounded border-gray-300"
-                    />
-                  </TableCell>
-                )}
+              <tr key={item.id} className="border-b">
                 {columns.map((col) => (
-                  <TableCell key={col.key}>
+                  <td key={col.key} className="px-4 py-3 align-middle">
                     {col.render
                       ? col.render(item)
-                      : String((item as any)[col.key] ?? "")}
-                  </TableCell>
+                      : (item as Record<string, unknown>)[col.key] as string}
+                  </td>
                 ))}
                 {(onEdit || onDelete || extraActions) && (
-                  <TableCell className="text-right space-x-2">
-                    {extraActions && extraActions(item)}
-                    {onEdit && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onEdit(item)}
-                      >
-                        编辑
-                      </Button>
-                    )}
-                    {onDelete && (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => onDelete(item)}
-                      >
-                        删除
-                      </Button>
-                    )}
-                  </TableCell>
+                  <td className="px-4 py-3 align-middle text-right">
+                    <div className="flex justify-end gap-2">
+                      {extraActions?.(item)}
+                      {onEdit && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onEdit(item)}
+                        >
+                          编辑
+                        </Button>
+                      )}
+                      {onDelete && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => onDelete(item)}
+                        >
+                          删除
+                        </Button>
+                      )}
+                    </div>
+                  </td>
                 )}
-              </TableRow>
+              </tr>
             ))
           )}
-        </TableBody>
-      </Table>
+        </tbody>
+      </table>
     </div>
   )
 }

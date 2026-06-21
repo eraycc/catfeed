@@ -6,6 +6,7 @@ import { LivePlayer } from "@/components/LivePlayer"
 import { FeedButton } from "@/components/FeedButton"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { auth } from "@/lib/auth"
 
 export const dynamic = 'force-dynamic'
 
@@ -15,6 +16,8 @@ interface Props {
 
 export default async function LivePage({ params }: Props) {
   const { cameraId } = await params
+  const session = await auth()
+  
   const camera = await db.camera.findUnique({
     where: { id: cameraId },
     include: {
@@ -32,13 +35,29 @@ export default async function LivePage({ params }: Props) {
 
   const feeder = camera.community.feeders[0] || null
 
+  // 获取系统配置
+  const maxFeedConfig = await db.systemConfig.findUnique({
+    where: { key: "max_feed_per_day" },
+  })
+  const maxFeedPerDay = maxFeedConfig ? parseInt(maxFeedConfig.value) : 10
+
+  // 获取今日投喂次数
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  const [todayCount, totalCount, recentLogs] = await Promise.all([
-    db.feedLog.count({
-      where: { cameraId, createdAt: { gte: today } },
-    }),
+  // 如果用户已登录，获取该用户今日的投喂次数
+  const userId = session?.user?.id
+  const todayCount = userId
+    ? await db.feedLog.count({
+        where: { 
+          userId,
+          createdAt: { gte: today },
+        },
+      })
+    : 0
+
+  // 获取该摄像头的总投喂次数和最近记录
+  const [totalCount, recentLogs] = await Promise.all([
     db.feedLog.count({
       where: { cameraId },
     }),
@@ -75,7 +94,12 @@ export default async function LivePage({ params }: Props) {
         <LivePlayer streamUrl={camera.streamUrl} />
 
         <div className="mt-4">
-          <FeedButton cameraId={cameraId} feederId={feeder?.id || null} />
+          <FeedButton 
+            cameraId={cameraId} 
+            feederId={feeder?.id || null}
+            maxFeedPerDay={maxFeedPerDay}
+            todayFeedCount={todayCount}
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-4 mt-6">

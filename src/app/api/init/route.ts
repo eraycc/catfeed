@@ -9,7 +9,7 @@ export async function POST() {
     const adminEmail = process.env.ADMIN_EMAIL || "admin@example.com"
     const adminPassword = process.env.ADMIN_PASSWORD || "admin123456"
 
-    const existingAdmin = await db.adminSetting.findUnique({
+    const existingAdmin = await db.user.findUnique({
       where: { email: adminEmail },
     })
 
@@ -17,31 +17,36 @@ export async function POST() {
       const bcrypt = await import("bcryptjs")
       const passwordHash = await bcrypt.hash(adminPassword, 12)
 
-      await db.adminSetting.create({
-        data: { email: adminEmail, passwordHash },
+      await db.user.create({
+        data: {
+          email: adminEmail,
+          passwordHash,
+          name: "管理员",
+          role: "ADMIN",
+        },
       })
-
-      const existingUser = await db.user.findUnique({
-        where: { email: adminEmail },
-      })
-
-      if (!existingUser) {
-        await db.user.create({
-          data: {
-            email: adminEmail,
-            passwordHash,
-            name: "管理员",
-            role: "ADMIN",
-          },
-        })
-      }
 
       results.push("Admin created")
     } else {
       results.push("Admin already exists")
     }
 
-    // 2. 创建种子数据（如果不存在）
+    // 2. 初始化系统配置
+    const systemConfigs = [
+      { key: "allow_feed", value: "true", label: "是否允许投喂" },
+      { key: "max_feed_per_day", value: "10", label: "每用户每日最大投喂次数" },
+    ]
+
+    for (const config of systemConfigs) {
+      await db.systemConfig.upsert({
+        where: { key: config.key },
+        update: {},
+        create: config,
+      })
+    }
+    results.push("System configs initialized")
+
+    // 3. 创建种子数据（如果不存在）
     const communityCount = await db.community.count()
     if (communityCount === 0) {
       const c1 = await db.community.create({

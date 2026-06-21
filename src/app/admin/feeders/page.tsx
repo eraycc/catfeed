@@ -137,7 +137,13 @@ export default function FeedersPage() {
         onOpenChange={setDialogOpen}
         title={editing ? "编辑投喂器" : "添加投喂器"}
         fields={formFields}
-        initialData={editing || undefined}
+        initialData={editing ? {
+          id: editing.id,
+          name: editing.name,
+          type: editing.type,
+          status: editing.status,
+          communityId: editing.communityId,
+        } : undefined}
         onSubmit={handleSubmit}
       />
     </div>

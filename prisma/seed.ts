@@ -7,40 +7,45 @@ async function main() {
   const adminEmail = process.env.ADMIN_EMAIL || "admin@example.com"
   const adminPassword = process.env.ADMIN_PASSWORD || "admin123456"
 
-  const existingAdmin = await prisma.adminSetting.findUnique({
+  // 检查是否已存在管理员用户
+  const existingUser = await prisma.user.findUnique({
     where: { email: adminEmail },
   })
 
-  if (!existingAdmin) {
+  if (!existingUser) {
     const passwordHash = await bcrypt.hash(adminPassword, 12)
 
-    await prisma.adminSetting.create({
+    await prisma.user.create({
       data: {
         email: adminEmail,
         passwordHash,
+        name: "管理员",
+        role: "ADMIN",
       },
     })
 
-    const existingUser = await prisma.user.findUnique({
-      where: { email: adminEmail },
-    })
-
-    if (!existingUser) {
-      await prisma.user.create({
-        data: {
-          email: adminEmail,
-          passwordHash,
-          name: "管理员",
-          role: "ADMIN",
-        },
-      })
-    }
-
     console.log(`Admin user created: ${adminEmail}`)
   } else {
-    console.log("Admin already initialized, skipping env admin creation")
+    console.log("Admin user already exists, skipping")
   }
 
+  // 初始化系统配置
+  const systemConfigs = [
+    { key: "allow_feed", value: "true", label: "是否允许投喂" },
+    { key: "max_feed_per_day", value: "10", label: "每用户每日最大投喂次数" },
+  ]
+
+  for (const config of systemConfigs) {
+    await prisma.systemConfig.upsert({
+      where: { key: config.key },
+      update: {},
+      create: config,
+    })
+  }
+
+  console.log("System configs initialized")
+
+  // 检查是否有社区数据
   const communityCount = await prisma.community.count()
   if (communityCount === 0) {
     const community1 = await prisma.community.create({
@@ -100,6 +105,8 @@ async function main() {
     })
 
     console.log("Seed data created: 2 communities, 3 cameras, 2 feeders")
+  } else {
+    console.log("Communities already exist, skipping seed data")
   }
 }
 
