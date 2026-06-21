@@ -5,13 +5,21 @@ const globalForPrisma = globalThis as unknown as {
 }
 
 function createPrismaClient() {
-  const url = process.env.DATABASE_URL
+  let url = process.env.DATABASE_URL || ""
+
+  if (process.env.VERCEL || process.env.NODE_ENV === "production") {
+    if (!url.includes("connection_limit")) {
+      url += url.includes("?") ? "&connection_limit=1" : "?connection_limit=1"
+    }
+    if (!url.includes("pool_timeout")) {
+      url += "&pool_timeout=0"
+    }
+  }
+
   return new PrismaClient({
     log: process.env.NODE_ENV === "development" ? ["query"] : [],
     datasources: {
-      db: {
-        url: url?.includes("?") ? `${url}&pgbouncer=true` : `${url}?pgbouncer=true`,
-      },
+      db: { url },
     },
   })
 }
