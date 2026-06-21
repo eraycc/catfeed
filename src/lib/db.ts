@@ -8,12 +8,20 @@ function createPrismaClient() {
   let url = process.env.DATABASE_URL || ""
 
   if (process.env.VERCEL || process.env.NODE_ENV === "production") {
-    if (!url.includes("connection_limit")) {
-      url += url.includes("?") ? "&connection_limit=1" : "?connection_limit=1"
+    const params = new URLSearchParams(url.split("?")[1] || "")
+
+    if (!params.has("pgbouncer")) {
+      params.set("pgbouncer", "true")
     }
-    if (!url.includes("pool_timeout")) {
-      url += "&pool_timeout=0"
+    if (!params.has("connection_limit")) {
+      params.set("connection_limit", "1")
     }
+    if (!params.has("pool_timeout")) {
+      params.set("pool_timeout", "0")
+    }
+
+    const baseUrl = url.split("?")[0]
+    url = `${baseUrl}?${params.toString()}`
   }
 
   return new PrismaClient({
