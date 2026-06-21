@@ -1,15 +1,41 @@
-import { db } from "@/lib/db"
-
 export async function initializeDatabase() {
   const results: string[] = []
+  const { PrismaClient } = await import("@prisma/client")
+
+  let url = process.env.DATABASE_URL || ""
+
+  if (process.env.VERCEL || process.env.NODE_ENV === "production") {
+    const params = new URLSearchParams(url.split("?")[1] || "")
+
+    if (!params.has("pgbouncer")) {
+      params.set("pgbouncer", "true")
+    }
+    if (!params.has("connection_limit")) {
+      params.set("connection_limit", "1")
+    }
+    if (!params.has("pool_timeout")) {
+      params.set("pool_timeout", "0")
+    }
+
+    const baseUrl = url.split("?")[0]
+    url = `${baseUrl}?${params.toString()}`
+  }
+
+  const prisma = new PrismaClient({
+    log: process.env.NODE_ENV === "development" ? ["query"] : [],
+    datasources: {
+      db: { url },
+    },
+  })
 
   try {
-    await db.community.count()
+    await prisma.community.count()
+    results.push("Tables already exist")
   } catch (error) {
     console.log("Tables do not exist, creating...")
     try {
-      const tables = [
-        `CREATE TABLE IF NOT EXISTS catfeed_communities (
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS catfeed_communities (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
           description TEXT,
@@ -18,26 +44,12 @@ export async function initializeDatabase() {
           is_active BOOLEAN DEFAULT TRUE,
           created_at TIMESTAMP DEFAULT NOW(),
           updated_at TIMESTAMP DEFAULT NOW()
-        )`,
-        `CREATE TABLE IF NOT EXISTS catfeed_cameras (
-          id TEXT PRIMARY KEY,
-          community_id TEXT NOT NULL REFERENCES catfeed_communities(id),
-          name TEXT NOT NULL,
-          stream_url TEXT NOT NULL,
-          status TEXT NOT NULL DEFAULT 'OFFLINE',
-          created_at TIMESTAMP DEFAULT NOW(),
-          updated_at TIMESTAMP DEFAULT NOW()
-        )`,
-        `CREATE TABLE IF NOT EXISTS catfeed_feeders (
-          id TEXT PRIMARY KEY,
-          community_id TEXT NOT NULL REFERENCES catfeed_communities(id),
-          name TEXT NOT NULL,
-          type TEXT NOT NULL DEFAULT 'SIMULATED',
-          status TEXT NOT NULL DEFAULT 'OFFLINE',
-          created_at TIMESTAMP DEFAULT NOW(),
-          updated_at TIMESTAMP DEFAULT NOW()
-        )`,
-        `CREATE TABLE IF NOT EXISTS catfeed_users (
+        )
+      `)
+      results.push("catfeed_communities created")
+
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS catfeed_users (
           id TEXT PRIMARY KEY,
           email TEXT UNIQUE NOT NULL,
           password_hash TEXT,
@@ -47,33 +59,73 @@ export async function initializeDatabase() {
           avatar_url TEXT,
           created_at TIMESTAMP DEFAULT NOW(),
           updated_at TIMESTAMP DEFAULT NOW()
-        )`,
-        `CREATE TABLE IF NOT EXISTS catfeed_system_configs (
+        )
+      `)
+      results.push("catfeed_users created")
+
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS catfeed_cameras (
+          id TEXT PRIMARY KEY,
+          community_id TEXT NOT NULL REFERENCES catfeed_communities(id),
+          name TEXT NOT NULL,
+          stream_url TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'OFFLINE',
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `)
+      results.push("catfeed_cameras created")
+
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS catfeed_feeders (
+          id TEXT PRIMARY KEY,
+          community_id TEXT NOT NULL REFERENCES catfeed_communities(id),
+          name TEXT NOT NULL,
+          type TEXT NOT NULL DEFAULT 'SIMULATED',
+          status TEXT NOT NULL DEFAULT 'OFFLINE',
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `)
+      results.push("catfeed_feeders created")
+
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS catfeed_system_configs (
           id TEXT PRIMARY KEY,
           key TEXT UNIQUE NOT NULL,
           value TEXT NOT NULL,
           label TEXT,
           updated_at TIMESTAMP DEFAULT NOW()
-        )`,
-        `CREATE TABLE IF NOT EXISTS catfeed_feed_logs (
+        )
+      `)
+      results.push("catfeed_system_configs created")
+
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS catfeed_feed_logs (
           id TEXT PRIMARY KEY,
           user_id TEXT NOT NULL REFERENCES catfeed_users(id),
           camera_id TEXT NOT NULL REFERENCES catfeed_cameras(id),
           feeder_id TEXT NOT NULL REFERENCES catfeed_feeders(id),
           amount INTEGER DEFAULT 1,
           created_at TIMESTAMP DEFAULT NOW()
-        )`,
-        `CREATE INDEX IF NOT EXISTS idx_catfeed_feed_logs_user_id ON catfeed_feed_logs(user_id)`,
-        `CREATE INDEX IF NOT EXISTS idx_catfeed_feed_logs_camera_id ON catfeed_feed_logs(camera_id)`,
-        `CREATE INDEX IF NOT EXISTS idx_catfeed_feed_logs_created_at ON catfeed_feed_logs(created_at)`,
-      ]
+        )
+      `)
+      results.push("catfeed_feed_logs created")
 
-      for (const sql of tables) {
-        await db.$executeRawUnsafe(sql)
-      }
-      results.push("Database tables created")
+      await prisma.$executeRawUnsafe(`
+        CREATE INDEX IF NOT EXISTS idx_catfeed_feed_logs_user_id ON catfeed_feed_logs(user_id)
+      `)
+      await prisma.$executeRawUnsafe(`
+        CREATE INDEX IF NOT EXISTS idx_catfeed_feed_logs_camera_id ON catfeed_feed_logs(camera_id)
+      `)
+      await prisma.$executeRawUnsafe(`
+        CREATE INDEX IF NOT EXISTS idx_catfeed_feed_logs_created_at ON catfeed_feed_logs(created_at)
+      `)
+      results.push("Indexes created")
+
     } catch (e: any) {
       console.error("Failed to create tables:", e)
+      await prisma.$disconnect()
       throw new Error(`Database initialization failed: ${e.message}`)
     }
   }
@@ -81,7 +133,7 @@ export async function initializeDatabase() {
   const adminEmail = process.env.ADMIN_EMAIL || "admin@example.com"
   const adminPassword = process.env.ADMIN_PASSWORD || "admin123456"
 
-  const existingAdmin = await db.user.findUnique({
+  const existingAdmin = await prisma.user.findUnique({
     where: { email: adminEmail },
   })
 
@@ -89,7 +141,7 @@ export async function initializeDatabase() {
     const bcrypt = await import("bcryptjs")
     const passwordHash = await bcrypt.hash(adminPassword, 12)
 
-    await db.user.create({
+    await prisma.user.create({
       data: {
         email: adminEmail,
         passwordHash,
@@ -109,7 +161,7 @@ export async function initializeDatabase() {
   ]
 
   for (const config of systemConfigs) {
-    await db.systemConfig.upsert({
+    await prisma.systemConfig.upsert({
       where: { key: config.key },
       update: {},
       create: config,
@@ -117,9 +169,9 @@ export async function initializeDatabase() {
   }
   results.push("System configs initialized")
 
-  const communityCount = await db.community.count()
+  const communityCount = await prisma.community.count()
   if (communityCount === 0) {
-    const c1 = await db.community.create({
+    const c1 = await prisma.community.create({
       data: {
         name: "阳光社区流浪猫救助站",
         description: "位于阳光社区花园旁，常年有20余只流浪猫生活",
@@ -127,7 +179,7 @@ export async function initializeDatabase() {
       },
     })
 
-    const c2 = await db.community.create({
+    const c2 = await prisma.community.create({
       data: {
         name: "和平公园动物之家",
         description: "和平公园内官方救助点，配有专业护理人员",
@@ -135,7 +187,7 @@ export async function initializeDatabase() {
       },
     })
 
-    await db.camera.createMany({
+    await prisma.camera.createMany({
       data: [
         {
           communityId: c1.id,
@@ -158,7 +210,7 @@ export async function initializeDatabase() {
       ],
     })
 
-    await db.feeder.createMany({
+    await prisma.feeder.createMany({
       data: [
         { communityId: c1.id, name: "1号投喂器", type: "SIMULATED", status: "ONLINE" },
         { communityId: c2.id, name: "2号投喂器", type: "SIMULATED", status: "ONLINE" },
@@ -170,5 +222,6 @@ export async function initializeDatabase() {
     results.push("Seed data already exists")
   }
 
+  await prisma.$disconnect()
   return results
 }
