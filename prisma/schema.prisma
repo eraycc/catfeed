@@ -19,7 +19,7 @@ model User {
   updatedAt    DateTime    @updatedAt @map("updated_at")
   feedLogs     FeedLog[]
 
-  @@map("users")
+  @@map("catfeed_users")
 }
 
 model Community {
@@ -120,5 +120,5 @@ model SystemConfig {
   label     String
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@map("system_configs")
+  @@map("catfeed_system_configs")
 }

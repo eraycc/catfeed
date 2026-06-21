@@ -9,7 +9,7 @@ export async function initializeDatabase() {
     console.log("Tables do not exist, creating...")
     try {
       const tables = [
-        `CREATE TABLE IF NOT EXISTS communities (
+        `CREATE TABLE IF NOT EXISTS catfeed_communities (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
           description TEXT,
@@ -19,50 +19,53 @@ export async function initializeDatabase() {
           created_at TIMESTAMP DEFAULT NOW(),
           updated_at TIMESTAMP DEFAULT NOW()
         )`,
-        `CREATE TABLE IF NOT EXISTS cameras (
+        `CREATE TABLE IF NOT EXISTS catfeed_cameras (
           id TEXT PRIMARY KEY,
-          community_id TEXT NOT NULL REFERENCES communities(id),
+          community_id TEXT NOT NULL REFERENCES catfeed_communities(id),
           name TEXT NOT NULL,
           stream_url TEXT NOT NULL,
           status TEXT NOT NULL DEFAULT 'OFFLINE',
           created_at TIMESTAMP DEFAULT NOW(),
           updated_at TIMESTAMP DEFAULT NOW()
         )`,
-        `CREATE TABLE IF NOT EXISTS feeders (
+        `CREATE TABLE IF NOT EXISTS catfeed_feeders (
           id TEXT PRIMARY KEY,
-          community_id TEXT NOT NULL REFERENCES communities(id),
+          community_id TEXT NOT NULL REFERENCES catfeed_communities(id),
           name TEXT NOT NULL,
           type TEXT NOT NULL DEFAULT 'SIMULATED',
           status TEXT NOT NULL DEFAULT 'OFFLINE',
           created_at TIMESTAMP DEFAULT NOW(),
           updated_at TIMESTAMP DEFAULT NOW()
         )`,
-        `CREATE TABLE IF NOT EXISTS users (
+        `CREATE TABLE IF NOT EXISTS catfeed_users (
           id TEXT PRIMARY KEY,
           email TEXT UNIQUE NOT NULL,
           password_hash TEXT,
           name TEXT,
           role TEXT NOT NULL DEFAULT 'USER',
           is_active BOOLEAN DEFAULT TRUE,
+          avatar_url TEXT,
           created_at TIMESTAMP DEFAULT NOW(),
           updated_at TIMESTAMP DEFAULT NOW()
         )`,
-        `CREATE TABLE IF NOT EXISTS system_configs (
-          key TEXT PRIMARY KEY,
-          value TEXT NOT NULL,
-          label TEXT
-        )`,
-        `CREATE TABLE IF NOT EXISTS feed_logs (
+        `CREATE TABLE IF NOT EXISTS catfeed_system_configs (
           id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL REFERENCES users(id),
-          camera_id TEXT NOT NULL REFERENCES cameras(id),
-          feeder_id TEXT NOT NULL REFERENCES feeders(id),
+          key TEXT UNIQUE NOT NULL,
+          value TEXT NOT NULL,
+          label TEXT,
+          updated_at TIMESTAMP DEFAULT NOW()
+        )`,
+        `CREATE TABLE IF NOT EXISTS catfeed_feed_logs (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES catfeed_users(id),
+          camera_id TEXT NOT NULL REFERENCES catfeed_cameras(id),
+          feeder_id TEXT NOT NULL REFERENCES catfeed_feeders(id),
           amount INTEGER DEFAULT 1,
           created_at TIMESTAMP DEFAULT NOW()
         )`,
-        `CREATE INDEX IF NOT EXISTS idx_feed_logs_user_id ON feed_logs(user_id)`,
-        `CREATE INDEX IF NOT EXISTS idx_feed_logs_camera_id ON feed_logs(camera_id)`,
-        `CREATE INDEX IF NOT EXISTS idx_feed_logs_created_at ON feed_logs(created_at)`,
+        `CREATE INDEX IF NOT EXISTS idx_catfeed_feed_logs_user_id ON catfeed_feed_logs(user_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_catfeed_feed_logs_camera_id ON catfeed_feed_logs(camera_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_catfeed_feed_logs_created_at ON catfeed_feed_logs(created_at)`,
       ]
 
       for (const sql of tables) {
