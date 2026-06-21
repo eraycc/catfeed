@@ -26,7 +26,6 @@ export default function FeedLogsPage() {
   const [pageData, setPageData] = useState<PageData | null>(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
-  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
 
   const fetchData = useCallback(async () => {
@@ -35,7 +34,6 @@ export default function FeedLogsPage() {
       const res = await fetch(`/api/admin/feed-logs?page=${page}&pageSize=${pageSize}`)
       const data = await res.json()
       setPageData(data)
-      setSelectedIds([])
     } catch {
       toast.error("加载失败")
     } finally {
@@ -44,28 +42,6 @@ export default function FeedLogsPage() {
   }, [page, pageSize])
 
   useEffect(() => { fetchData() }, [fetchData])
-
-  const handleDeleteSelected = async () => {
-    if (selectedIds.length === 0) {
-      toast.error("请先选择要删除的记录")
-      return
-    }
-    if (!confirm(`确定删除选中的 ${selectedIds.length} 条记录？`)) return
-
-    try {
-      const res = await fetch("/api/admin/feed-logs", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: selectedIds }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      toast.success(`已删除 ${data.deleted} 条记录`)
-      fetchData()
-    } catch (e: any) {
-      toast.error("删除失败", { description: e.message })
-    }
-  }
 
   const handleDeleteSingle = async (item: FeedLog) => {
     if (!confirm(`确定删除该条投喂记录？`)) return
@@ -105,11 +81,6 @@ export default function FeedLogsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">投喂记录</h1>
-        {selectedIds.length > 0 && (
-          <Button variant="destructive" onClick={handleDeleteSelected}>
-            删除选中 ({selectedIds.length})
-          </Button>
-        )}
       </div>
 
       <div className="mb-3 text-sm text-muted-foreground">
@@ -120,8 +91,6 @@ export default function FeedLogsPage() {
         columns={columns}
         data={data}
         onDelete={handleDeleteSingle}
-        selectedIds={selectedIds}
-        onSelectionChange={setSelectedIds}
       />
 
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-4 gap-3">
