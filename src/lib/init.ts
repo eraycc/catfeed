@@ -3,6 +3,82 @@ import { db } from "@/lib/db"
 export async function initializeDatabase() {
   const results: string[] = []
 
+  try {
+    await db.community.count()
+  } catch {
+    try {
+      const { PrismaClient } = await import("@prisma/client")
+      const prisma = new PrismaClient()
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS communities (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          description TEXT,
+          location TEXT,
+          cover_image TEXT,
+          is_active BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        );
+        
+        CREATE TABLE IF NOT EXISTS cameras (
+          id TEXT PRIMARY KEY,
+          community_id TEXT NOT NULL REFERENCES communities(id),
+          name TEXT NOT NULL,
+          stream_url TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'OFFLINE',
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        );
+        
+        CREATE TABLE IF NOT EXISTS feeders (
+          id TEXT PRIMARY KEY,
+          community_id TEXT NOT NULL REFERENCES communities(id),
+          name TEXT NOT NULL,
+          type TEXT NOT NULL DEFAULT 'SIMULATED',
+          status TEXT NOT NULL DEFAULT 'OFFLINE',
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        );
+        
+        CREATE TABLE IF NOT EXISTS users (
+          id TEXT PRIMARY KEY,
+          email TEXT UNIQUE NOT NULL,
+          password_hash TEXT,
+          name TEXT,
+          role TEXT NOT NULL DEFAULT 'USER',
+          is_active BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        );
+        
+        CREATE TABLE IF NOT EXISTS system_configs (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          label TEXT
+        );
+        
+        CREATE TABLE IF NOT EXISTS feed_logs (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(id),
+          camera_id TEXT NOT NULL REFERENCES cameras(id),
+          feeder_id TEXT NOT NULL REFERENCES feeders(id),
+          amount INTEGER DEFAULT 1,
+          created_at TIMESTAMP DEFAULT NOW()
+        );
+        
+        CREATE INDEX IF NOT EXISTS idx_feed_logs_user_id ON feed_logs(user_id);
+        CREATE INDEX IF NOT EXISTS idx_feed_logs_camera_id ON feed_logs(camera_id);
+        CREATE INDEX IF NOT EXISTS idx_feed_logs_created_at ON feed_logs(created_at);
+      `)
+      await prisma.$disconnect()
+      results.push("Database tables created")
+    } catch (e) {
+      console.error("Failed to create tables:", e)
+      throw new Error("Database initialization failed: tables could not be created")
+    }
+  }
+
   const adminEmail = process.env.ADMIN_EMAIL || "admin@example.com"
   const adminPassword = process.env.ADMIN_PASSWORD || "admin123456"
 
