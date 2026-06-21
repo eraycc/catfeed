@@ -19,7 +19,7 @@ model User {
   updatedAt    DateTime    @updatedAt @map("updated_at")
   feedLogs     FeedLog[]
 
-  @@map("catfeed_users")
+  @@map("cf_users")
 }
 
 model Community {
@@ -34,7 +34,7 @@ model Community {
   cameras     Camera[]
   feeders     Feeder[]
 
-  @@map("communities")
+  @@map("cf_communities")
 }
 
 model Camera {
@@ -48,7 +48,7 @@ model Camera {
   updatedAt   DateTime     @updatedAt @map("updated_at")
   feedLogs    FeedLog[]
 
-  @@map("cameras")
+  @@map("cf_cameras")
 }
 
 model Feeder {
@@ -62,7 +62,7 @@ model Feeder {
   updatedAt   DateTime      @updatedAt @map("updated_at")
   feedLogs    FeedLog[]
 
-  @@map("feeders")
+  @@map("cf_feeders")
 }
 
 model FeedLog {
@@ -79,16 +79,17 @@ model FeedLog {
   @@index([userId])
   @@index([cameraId])
   @@index([createdAt])
-  @@map("feed_logs")
+  @@map("cf_feed_logs")
 }
 
-model AdminSetting {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  createdAt    DateTime @default(now()) @map("created_at")
+model SystemConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  label     String
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@map("admin_settings")
+  @@map("cf_system_configs")
 }
 
 enum UserRole {
@@ -111,14 +112,4 @@ enum FeederStatus {
 enum FeederType {
   SIMULATED
   REAL
-}
-
-model SystemConfig {
-  id        String   @id @default(cuid())
-  key       String   @unique
-  value     String
-  label     String
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@map("catfeed_system_configs")
 }

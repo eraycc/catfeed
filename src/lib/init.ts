@@ -34,16 +34,31 @@ export async function initializeDatabase() {
   } catch (error) {
     console.log("Tables do not exist, creating...")
     try {
+      // 删除所有可能存在的旧表（包括 catfeed_ 前缀的）
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS cf_feed_logs CASCADE`)
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS cf_cameras CASCADE`)
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS cf_feeders CASCADE`)
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS cf_system_configs CASCADE`)
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS cf_users CASCADE`)
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS cf_communities CASCADE`)
+      
       await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS catfeed_feed_logs CASCADE`)
       await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS catfeed_cameras CASCADE`)
       await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS catfeed_feeders CASCADE`)
       await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS catfeed_system_configs CASCADE`)
       await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS catfeed_users CASCADE`)
       await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS catfeed_communities CASCADE`)
+      
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS feed_logs CASCADE`)
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS cameras CASCADE`)
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS feeders CASCADE`)
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS system_configs CASCADE`)
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS users CASCADE`)
+      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS communities CASCADE`)
       results.push("Cleaned existing tables")
 
       await prisma.$executeRawUnsafe(`
-        CREATE TABLE catfeed_communities (
+        CREATE TABLE cf_communities (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
           description TEXT,
@@ -54,10 +69,10 @@ export async function initializeDatabase() {
           updated_at TIMESTAMP DEFAULT NOW()
         )
       `)
-      results.push("catfeed_communities created")
+      results.push("cf_communities created")
 
       await prisma.$executeRawUnsafe(`
-        CREATE TABLE catfeed_users (
+        CREATE TABLE cf_users (
           id TEXT PRIMARY KEY,
           email TEXT UNIQUE NOT NULL,
           password_hash TEXT,
@@ -69,12 +84,12 @@ export async function initializeDatabase() {
           updated_at TIMESTAMP DEFAULT NOW()
         )
       `)
-      results.push("catfeed_users created")
+      results.push("cf_users created")
 
       await prisma.$executeRawUnsafe(`
-        CREATE TABLE catfeed_cameras (
+        CREATE TABLE cf_cameras (
           id TEXT PRIMARY KEY,
-          community_id TEXT NOT NULL REFERENCES catfeed_communities(id),
+          community_id TEXT NOT NULL REFERENCES cf_communities(id),
           name TEXT NOT NULL,
           stream_url TEXT NOT NULL,
           status TEXT NOT NULL DEFAULT 'OFFLINE',
@@ -82,12 +97,12 @@ export async function initializeDatabase() {
           updated_at TIMESTAMP DEFAULT NOW()
         )
       `)
-      results.push("catfeed_cameras created")
+      results.push("cf_cameras created")
 
       await prisma.$executeRawUnsafe(`
-        CREATE TABLE catfeed_feeders (
+        CREATE TABLE cf_feeders (
           id TEXT PRIMARY KEY,
-          community_id TEXT NOT NULL REFERENCES catfeed_communities(id),
+          community_id TEXT NOT NULL REFERENCES cf_communities(id),
           name TEXT NOT NULL,
           type TEXT NOT NULL DEFAULT 'SIMULATED',
           status TEXT NOT NULL DEFAULT 'OFFLINE',
@@ -95,10 +110,10 @@ export async function initializeDatabase() {
           updated_at TIMESTAMP DEFAULT NOW()
         )
       `)
-      results.push("catfeed_feeders created")
+      results.push("cf_feeders created")
 
       await prisma.$executeRawUnsafe(`
-        CREATE TABLE catfeed_system_configs (
+        CREATE TABLE cf_system_configs (
           id TEXT PRIMARY KEY,
           key TEXT UNIQUE NOT NULL,
           value TEXT NOT NULL,
@@ -106,28 +121,28 @@ export async function initializeDatabase() {
           updated_at TIMESTAMP DEFAULT NOW()
         )
       `)
-      results.push("catfeed_system_configs created")
+      results.push("cf_system_configs created")
 
       await prisma.$executeRawUnsafe(`
-        CREATE TABLE catfeed_feed_logs (
+        CREATE TABLE cf_feed_logs (
           id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL REFERENCES catfeed_users(id),
-          camera_id TEXT NOT NULL REFERENCES catfeed_cameras(id),
-          feeder_id TEXT NOT NULL REFERENCES catfeed_feeders(id),
+          user_id TEXT NOT NULL REFERENCES cf_users(id),
+          camera_id TEXT NOT NULL REFERENCES cf_cameras(id),
+          feeder_id TEXT NOT NULL REFERENCES cf_feeders(id),
           amount INTEGER DEFAULT 1,
           created_at TIMESTAMP DEFAULT NOW()
         )
       `)
-      results.push("catfeed_feed_logs created")
+      results.push("cf_feed_logs created")
 
       await prisma.$executeRawUnsafe(`
-        CREATE INDEX idx_catfeed_feed_logs_user_id ON catfeed_feed_logs(user_id)
+        CREATE INDEX idx_cf_feed_logs_user_id ON cf_feed_logs(user_id)
       `)
       await prisma.$executeRawUnsafe(`
-        CREATE INDEX idx_catfeed_feed_logs_camera_id ON catfeed_feed_logs(camera_id)
+        CREATE INDEX idx_cf_feed_logs_camera_id ON cf_feed_logs(camera_id)
       `)
       await prisma.$executeRawUnsafe(`
-        CREATE INDEX idx_catfeed_feed_logs_created_at ON catfeed_feed_logs(created_at)
+        CREATE INDEX idx_cf_feed_logs_created_at ON cf_feed_logs(created_at)
       `)
       results.push("Indexes created")
 
