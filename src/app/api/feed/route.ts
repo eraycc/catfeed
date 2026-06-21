@@ -104,7 +104,6 @@ export async function POST(req: Request) {
     const feedLog = await db.feedLog.create({
       data: {
         userId: session.user.id,
-        communityId: camera.communityId,
         cameraId,
         feederId,
         amount: 1,
