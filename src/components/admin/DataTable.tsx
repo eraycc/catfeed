@@ -24,6 +24,7 @@ interface DataTableProps<T> {
   selectedIds?: string[]
   onSelectionChange?: (ids: string[]) => void
   idKey?: string
+  extraActions?: (item: T) => React.ReactNode
 }
 
 export function DataTable<T extends { id: string }>({
@@ -34,6 +35,7 @@ export function DataTable<T extends { id: string }>({
   selectedIds,
   onSelectionChange,
   idKey = "id",
+  extraActions,
 }: DataTableProps<T>) {
   const allSelected = data.length > 0 && data.every((item) => selectedIds?.includes(item[idKey as keyof T] as string))
   const someSelected = data.some((item) => selectedIds?.includes(item[idKey as keyof T] as string))
@@ -77,7 +79,7 @@ export function DataTable<T extends { id: string }>({
             {columns.map((col) => (
               <TableHead key={col.key}>{col.label}</TableHead>
             ))}
-            {(onEdit || onDelete) && (
+            {(onEdit || onDelete || extraActions) && (
               <TableHead className="text-right">操作</TableHead>
             )}
           </TableRow>
@@ -86,7 +88,7 @@ export function DataTable<T extends { id: string }>({
           {data.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={columns.length + (onSelectionChange ? 1 : 0) + (onEdit || onDelete ? 1 : 0)}
+                colSpan={columns.length + (onSelectionChange ? 1 : 0) + (onEdit || onDelete || extraActions ? 1 : 0)}
                 className="text-center py-8 text-muted-foreground"
               >
                 暂无数据
@@ -112,8 +114,9 @@ export function DataTable<T extends { id: string }>({
                       : String((item as any)[col.key] ?? "")}
                   </TableCell>
                 ))}
-                {(onEdit || onDelete) && (
+                {(onEdit || onDelete || extraActions) && (
                   <TableCell className="text-right space-x-2">
+                    {extraActions && extraActions(item)}
                     {onEdit && (
                       <Button
                         variant="outline"

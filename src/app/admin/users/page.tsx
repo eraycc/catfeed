@@ -161,35 +161,16 @@ export default function UsersPage() {
         data={data}
         onEdit={(item) => { setEditing(item); setDialogOpen(true) }}
         onDelete={handleDelete}
+        extraActions={(item: User) => (
+          <Button
+            variant={item.isActive ? "destructive" : "default"}
+            size="sm"
+            onClick={() => handleToggleActive(item)}
+          >
+            {item.isActive ? "禁用" : "启用"}
+          </Button>
+        )}
       />
-
-      <div className="mt-4 space-y-2">
-        {data.map((user) => (
-          <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm">
-                {user.name?.charAt(0) || "U"}
-              </div>
-              <div>
-                <p className="text-sm font-medium">{user.name}</p>
-                <p className="text-xs text-muted-foreground">{user.email}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant={user.isActive ? "default" : "destructive"}>
-                {user.isActive ? "启用" : "禁用"}
-              </Badge>
-              <Button
-                variant={user.isActive ? "destructive" : "default"}
-                size="sm"
-                onClick={() => handleToggleActive(user)}
-              >
-                {user.isActive ? "禁用" : "启用"}
-              </Button>
-            </div>
-          </div>
-        ))}
-      </div>
 
       <FormDialog
         open={dialogOpen}

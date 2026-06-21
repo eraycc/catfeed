@@ -21,7 +21,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 RUN npx prisma generate
-RUN npm run build
+RUN DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder" npm run build
 
 # Production image, copy all the files and run next
 FROM node:20-slim AS runner
