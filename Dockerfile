@@ -21,7 +21,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 RUN npx prisma generate
-RUN DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder" npm run build
+RUN npm run build
 
 # Production image, copy all the files and run next
 FROM node:20-slim AS runner
@@ -64,4 +64,4 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["sh", "-c", "node scripts/init-admin.js && node server.js"]
+CMD ["sh", "-c", "./node_modules/.bin/prisma db push --skip-generate && node scripts/init-admin.js && node server.js"]
