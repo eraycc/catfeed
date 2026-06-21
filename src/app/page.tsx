@@ -85,6 +85,21 @@ async function ensureInit() {
       { communityId: c2.id, name: "2号投喂器", type: "SIMULATED", status: "ONLINE" },
     ],
   })
+
+  // 3. 创建默认系统配置
+  const configCount = await db.systemConfig.count()
+  if (configCount === 0) {
+    await db.systemConfig.createMany({
+      data: [
+        { key: "site_name", value: "CatFeed", label: "站点名称" },
+        { key: "site_description", value: "远程投喂流浪动物平台", label: "站点描述" },
+        { key: "allow_register", value: "true", label: "允许用户注册" },
+        { key: "allow_login", value: "true", label: "允许普通用户登录" },
+        { key: "allow_feed", value: "true", label: "允许投喂操作" },
+        { key: "max_feed_per_day", value: "50", label: "每用户每日最大投喂次数" },
+      ],
+    })
+  }
 }
 
 export default async function HomePage() {

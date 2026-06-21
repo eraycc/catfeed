@@ -3,6 +3,15 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import { db } from "./db"
 
+async function getSystemConfig(key: string): Promise<string | null> {
+  try {
+    const config = await db.systemConfig.findUnique({ where: { key } })
+    return config?.value || null
+  } catch {
+    return null
+  }
+}
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
   providers: [
@@ -23,6 +32,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (!user) {
           return null
+        }
+
+        if (!user.isActive && user.role !== "ADMIN") {
+          throw new Error("该账户已被禁用，请联系管理员")
+        }
+
+        const allowLogin = await getSystemConfig("allow_login")
+        if (allowLogin === "false" && user.role !== "ADMIN") {
+          throw new Error("系统已关闭普通用户登录，请稍后再试")
         }
 
         const isPasswordValid = await bcrypt.compare(

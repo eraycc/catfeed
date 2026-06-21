@@ -12,6 +12,7 @@ const navItems = [
   { href: "/admin/feeders", label: "投喂器管理", icon: "🍖" },
   { href: "/admin/feed-logs", label: "投喂记录", icon: "📋" },
   { href: "/admin/users", label: "用户管理", icon: "👥" },
+  { href: "/admin/system", label: "系统设置", icon: "⚙️" },
 ]
 
 interface SidebarProps {

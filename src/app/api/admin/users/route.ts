@@ -15,6 +15,7 @@ export async function GET() {
       email: true,
       name: true,
       role: true,
+      isActive: true,
       createdAt: true,
       _count: { select: { feedLogs: true } },
     },

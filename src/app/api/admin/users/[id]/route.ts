@@ -18,6 +18,7 @@ export async function PUT(
     name: data.name,
     email: data.email,
     role: data.role,
+    isActive: data.isActive,
   }
 
   if (data.password) {

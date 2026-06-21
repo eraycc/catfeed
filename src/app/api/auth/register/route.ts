@@ -4,6 +4,16 @@ import { db } from "@/lib/db"
 
 export async function POST(req: Request) {
   try {
+    const allowRegister = await db.systemConfig.findUnique({
+      where: { key: "allow_register" },
+    })
+    if (allowRegister?.value === "false") {
+      return NextResponse.json(
+        { error: "系统已关闭注册，请联系管理员" },
+        { status: 403 }
+      )
+    }
+
     const { name, email, password } = await req.json()
 
     if (!name || !email || !password) {

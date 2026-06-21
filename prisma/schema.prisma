@@ -13,6 +13,7 @@ model User {
   passwordHash String      @map("password_hash")
   name         String
   role         UserRole    @default(USER)
+  isActive     Boolean     @default(true) @map("is_active")
   avatarUrl    String?     @map("avatar_url")
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
@@ -107,4 +108,14 @@ enum FeederStatus {
 enum FeederType {
   SIMULATED
   REAL
+}
+
+model SystemConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  label     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_configs")
 }

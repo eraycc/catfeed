@@ -12,6 +12,7 @@ interface User {
   email: string
   name: string
   role: string
+  isActive: boolean
   createdAt: string
   _count: { feedLogs: number }
 }
@@ -41,6 +42,15 @@ export default function UsersPage() {
       ],
     },
     {
+      name: "isActive",
+      label: "状态",
+      type: "select",
+      options: [
+        { value: "true", label: "启用" },
+        { value: "false", label: "禁用" },
+      ],
+    },
+    {
       name: "password",
       label: "密码",
       placeholder: editing ? "留空则不修改" : "输入密码",
@@ -57,6 +67,8 @@ export default function UsersPage() {
     if (editing && !formData.password) {
       delete formData.password
     }
+
+    formData.isActive = formData.isActive === "true"
 
     const res = await fetch(url, {
       method,
@@ -85,6 +97,27 @@ export default function UsersPage() {
     fetchData()
   }
 
+  const handleToggleActive = async (item: User) => {
+    const res = await fetch(`/api/admin/users/${item.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: item.name,
+        email: item.email,
+        role: item.role,
+        isActive: !item.isActive,
+      }),
+    })
+
+    if (!res.ok) {
+      toast.error("操作失败")
+      return
+    }
+
+    toast.success(item.isActive ? "已禁用" : "已启用")
+    fetchData()
+  }
+
   const columns: Column<User>[] = [
     { key: "name", label: "昵称" },
     { key: "email", label: "邮箱" },
@@ -94,6 +127,15 @@ export default function UsersPage() {
       render: (item) => (
         <Badge variant={item.role === "ADMIN" ? "default" : "secondary"}>
           {item.role === "ADMIN" ? "管理员" : "用户"}
+        </Badge>
+      ),
+    },
+    {
+      key: "isActive",
+      label: "状态",
+      render: (item) => (
+        <Badge variant={item.isActive ? "default" : "destructive"}>
+          {item.isActive ? "启用" : "禁用"}
         </Badge>
       ),
     },
@@ -121,12 +163,40 @@ export default function UsersPage() {
         onDelete={handleDelete}
       />
 
+      <div className="mt-4 space-y-2">
+        {data.map((user) => (
+          <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm">
+                {user.name?.charAt(0) || "U"}
+              </div>
+              <div>
+                <p className="text-sm font-medium">{user.name}</p>
+                <p className="text-xs text-muted-foreground">{user.email}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant={user.isActive ? "default" : "destructive"}>
+                {user.isActive ? "启用" : "禁用"}
+              </Badge>
+              <Button
+                variant={user.isActive ? "destructive" : "default"}
+                size="sm"
+                onClick={() => handleToggleActive(user)}
+              >
+                {user.isActive ? "禁用" : "启用"}
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <FormDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         title={editing ? "编辑用户" : "添加用户"}
         fields={formFields}
-        initialData={editing || undefined}
+        initialData={editing ? { ...editing, isActive: String(editing.isActive) } : undefined}
         onSubmit={handleSubmit}
       />
     </div>
