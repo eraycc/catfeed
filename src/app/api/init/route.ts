@@ -1,9 +1,28 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { execSync } from "child_process"
 
 export async function POST() {
   try {
-    // 检查是否已完成初始化 —— 若管理员和社区数据均存在则禁用此端点
+    const results: string[] = []
+
+    // 1. 始终先同步数据库 schema（prisma db push 是幂等的，已有表/列会跳过）
+    const dbUrl = process.env.DATABASE_URL || ""
+    try {
+      execSync("npx prisma db push --skip-generate", {
+        stdio: "pipe",
+        env: { ...process.env, DATABASE_URL: dbUrl },
+      })
+      results.push("Schema synced")
+    } catch (e: any) {
+      console.error("[init] Schema sync failed:", e.message)
+      return NextResponse.json(
+        { error: "数据库 schema 同步失败" },
+        { status: 500 }
+      )
+    }
+
+    // 2. 检查是否已完成初始化 —— 若管理员和社区数据均存在则跳过
     const adminEmail = process.env.ADMIN_EMAIL || "admin@example.com"
     const [existingAdmin, communityCount] = await Promise.all([
       db.user.findUnique({ where: { email: adminEmail } }),
@@ -11,15 +30,14 @@ export async function POST() {
     ])
 
     if (existingAdmin && communityCount > 0) {
-      return NextResponse.json(
-        { error: "系统已初始化，此端点已禁用" },
-        { status: 403 }
-      )
+      return NextResponse.json({
+        success: true,
+        message: "系统已初始化，仅执行了 schema 同步",
+        results,
+      })
     }
 
-    const results: string[] = []
-
-    // 1. 创建管理员（如果不存在）
+    // 3. 创建管理员（如果不存在）
     const adminPassword = process.env.ADMIN_PASSWORD || "admin123456"
 
     if (!existingAdmin) {
@@ -40,7 +58,7 @@ export async function POST() {
       results.push("Admin already exists")
     }
 
-    // 2. 初始化系统配置
+    // 4. 初始化系统配置
     const systemConfigs = [
       { key: "allow_feed", value: "true", label: "是否允许投喂" },
       { key: "max_feed_per_day", value: "10", label: "每用户每日最大投喂次数" },
@@ -55,7 +73,7 @@ export async function POST() {
     }
     results.push("System configs initialized")
 
-    // 3. 创建种子数据（如果不存在）
+    // 5. 创建种子数据（如果不存在）
     if (communityCount === 0) {
       const c1 = await db.community.create({
         data: {
