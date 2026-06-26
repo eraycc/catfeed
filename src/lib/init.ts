@@ -265,19 +265,9 @@ async function syncSchema(prisma: any) {
   }
 
   // 2. 确保 cf_feeders 表有 http_config 和 yaml_config 列（兼容旧数据库）
-  try {
-    await prisma.$executeRawUnsafe(`SELECT http_config FROM cf_feeders LIMIT 1`)
-  } catch {
-    console.log("[init] Adding column cf_feeders.http_config...")
-    await prisma.$executeRawUnsafe(`ALTER TABLE cf_feeders ADD COLUMN http_config TEXT`)
-  }
-
-  try {
-    await prisma.$executeRawUnsafe(`SELECT yaml_config FROM cf_feeders LIMIT 1`)
-  } catch {
-    console.log("[init] Adding column cf_feeders.yaml_config...")
-    await prisma.$executeRawUnsafe(`ALTER TABLE cf_feeders ADD COLUMN yaml_config TEXT`)
-  }
+  // 使用 IF NOT EXISTS 避免并发请求导致 "column already exists" 错误
+  await prisma.$executeRawUnsafe(`ALTER TABLE cf_feeders ADD COLUMN IF NOT EXISTS http_config TEXT`)
+  await prisma.$executeRawUnsafe(`ALTER TABLE cf_feeders ADD COLUMN IF NOT EXISTS yaml_config TEXT`)
 
   // 3. 确保索引存在
   const indexes = [

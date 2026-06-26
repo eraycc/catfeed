@@ -5,24 +5,11 @@ export async function POST() {
   try {
     const results: string[] = []
 
-    // 1. 同步 schema：添加缺失的列
+    // 1. 同步 schema：添加缺失的列（IF NOT EXISTS 避免并发冲突）
     try {
-      // 确保 cf_feeders 表有 http_config 和 yaml_config 列
-      try {
-        await db.$executeRawUnsafe(`SELECT http_config FROM cf_feeders LIMIT 1`)
-      } catch {
-        await db.$executeRawUnsafe(`ALTER TABLE cf_feeders ADD COLUMN http_config TEXT`)
-        results.push("Added column http_config")
-      }
-      try {
-        await db.$executeRawUnsafe(`SELECT yaml_config FROM cf_feeders LIMIT 1`)
-      } catch {
-        await db.$executeRawUnsafe(`ALTER TABLE cf_feeders ADD COLUMN yaml_config TEXT`)
-        results.push("Added column yaml_config")
-      }
-      if (results.length === 0) {
-        results.push("Schema already up to date")
-      }
+      await db.$executeRawUnsafe(`ALTER TABLE cf_feeders ADD COLUMN IF NOT EXISTS http_config TEXT`)
+      await db.$executeRawUnsafe(`ALTER TABLE cf_feeders ADD COLUMN IF NOT EXISTS yaml_config TEXT`)
+      results.push("Schema synced")
     } catch (e: any) {
       console.error("[init] Schema sync failed:", e.message)
       return NextResponse.json(
