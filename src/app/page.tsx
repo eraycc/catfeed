@@ -1,10 +1,14 @@
 import { db } from "@/lib/db"
+import { initializeDatabase } from "@/lib/init"
 import { Header } from "@/components/Header"
 import { CommunityCard } from "@/components/CommunityCard"
 
 export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
+  // 首次访问时同步 schema + 初始化数据（模块级标志位确保只执行一次）
+  await initializeDatabase()
+
   const communities = await db.community.findMany({
     where: { isActive: true },
     include: {
