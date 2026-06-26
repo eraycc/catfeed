@@ -35,23 +35,18 @@ export async function initializeDatabase() {
     },
   })
 
+  // 每次启动都同步 schema（prisma db push 是幂等的，已有表/列会跳过）
   try {
-    await prisma.community.count()
-    results.push("Tables already exist")
-  } catch {
-    console.log("[init] Tables do not exist, pushing schema...")
-    try {
-      // 使用 prisma db push 同步 schema（无需迁移文件，兼容 Vercel 环境）
-      execSync("npx prisma db push --skip-generate", {
-        stdio: "pipe",
-        env: { ...process.env, DATABASE_URL: url },
-      })
-      results.push("Schema pushed via prisma db push")
-    } catch (e: any) {
-      console.error("[init] Schema push failed:", e.message)
-      await prisma.$disconnect()
-      throw new Error(`Database initialization failed: ${e.message}`)
-    }
+    console.log("[init] Syncing database schema...")
+    execSync("npx prisma db push --skip-generate", {
+      stdio: "pipe",
+      env: { ...process.env, DATABASE_URL: url },
+    })
+    results.push("Schema synced via prisma db push")
+  } catch (e: any) {
+    console.error("[init] Schema push failed:", e.message)
+    await prisma.$disconnect()
+    throw new Error(`Database initialization failed: ${e.message}`)
   }
 
   const adminEmail = process.env.ADMIN_EMAIL || "admin@example.com"
