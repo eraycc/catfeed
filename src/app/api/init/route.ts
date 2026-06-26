@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { execSync } from "child_process"
+import path from "path"
 
 export async function POST() {
   try {
@@ -9,7 +10,8 @@ export async function POST() {
     // 1. 始终先同步数据库 schema（prisma db push 是幂等的，已有表/列会跳过）
     const dbUrl = process.env.DATABASE_URL || ""
     try {
-      execSync("npx prisma db push --skip-generate", {
+      const prismaBin = path.join(process.cwd(), "node_modules", ".bin", "prisma")
+      execSync(`"${prismaBin}" db push --skip-generate`, {
         stdio: "pipe",
         env: { ...process.env, DATABASE_URL: dbUrl },
       })

@@ -1,4 +1,5 @@
 import { execSync } from "child_process"
+import path from "path"
 
 let dbInitialized = false
 
@@ -36,9 +37,11 @@ export async function initializeDatabase() {
   })
 
   // 每次启动都同步 schema（prisma db push 是幂等的，已有表/列会跳过）
+  // 使用 node_modules 中的 prisma 二进制文件，不使用 npx（Vercel 运行时无法下载包）
   try {
     console.log("[init] Syncing database schema...")
-    execSync("npx prisma db push --skip-generate", {
+    const prismaBin = path.join(process.cwd(), "node_modules", ".bin", "prisma")
+    execSync(`"${prismaBin}" db push --skip-generate`, {
       stdio: "pipe",
       env: { ...process.env, DATABASE_URL: url },
     })
