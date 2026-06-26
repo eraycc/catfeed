@@ -1,4 +1,11 @@
+import { execSync } from "child_process"
+
+let dbInitialized = false
+
 export async function initializeDatabase() {
+  // 模块级标志位：已初始化则跳过，避免每次请求重复执行
+  if (dbInitialized) return ["Already initialized (skipped)"]
+
   const results: string[] = []
   const { PrismaClient } = await import("@prisma/client")
 
@@ -31,123 +38,17 @@ export async function initializeDatabase() {
   try {
     await prisma.community.count()
     results.push("Tables already exist")
-  } catch (error) {
-    console.log("Tables do not exist, creating...")
+  } catch {
+    console.log("[init] Tables do not exist, pushing schema...")
     try {
-      // 删除所有可能存在的旧表（包括 catfeed_ 前缀的）
-      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS cf_feed_logs CASCADE`)
-      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS cf_cameras CASCADE`)
-      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS cf_feeders CASCADE`)
-      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS cf_system_configs CASCADE`)
-      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS cf_users CASCADE`)
-      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS cf_communities CASCADE`)
-      
-      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS catfeed_feed_logs CASCADE`)
-      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS catfeed_cameras CASCADE`)
-      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS catfeed_feeders CASCADE`)
-      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS catfeed_system_configs CASCADE`)
-      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS catfeed_users CASCADE`)
-      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS catfeed_communities CASCADE`)
-      
-      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS feed_logs CASCADE`)
-      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS cameras CASCADE`)
-      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS feeders CASCADE`)
-      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS system_configs CASCADE`)
-      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS users CASCADE`)
-      await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS communities CASCADE`)
-      results.push("Cleaned existing tables")
-
-      await prisma.$executeRawUnsafe(`
-        CREATE TABLE cf_communities (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          description TEXT,
-          location TEXT,
-          cover_image TEXT,
-          is_active BOOLEAN DEFAULT TRUE,
-          created_at TIMESTAMP DEFAULT NOW(),
-          updated_at TIMESTAMP DEFAULT NOW()
-        )
-      `)
-      results.push("cf_communities created")
-
-      await prisma.$executeRawUnsafe(`
-        CREATE TABLE cf_users (
-          id TEXT PRIMARY KEY,
-          email TEXT UNIQUE NOT NULL,
-          password_hash TEXT,
-          name TEXT,
-          role TEXT NOT NULL DEFAULT 'USER',
-          is_active BOOLEAN DEFAULT TRUE,
-          avatar_url TEXT,
-          created_at TIMESTAMP DEFAULT NOW(),
-          updated_at TIMESTAMP DEFAULT NOW()
-        )
-      `)
-      results.push("cf_users created")
-
-      await prisma.$executeRawUnsafe(`
-        CREATE TABLE cf_cameras (
-          id TEXT PRIMARY KEY,
-          community_id TEXT NOT NULL REFERENCES cf_communities(id),
-          name TEXT NOT NULL,
-          stream_url TEXT NOT NULL,
-          status TEXT NOT NULL DEFAULT 'OFFLINE',
-          created_at TIMESTAMP DEFAULT NOW(),
-          updated_at TIMESTAMP DEFAULT NOW()
-        )
-      `)
-      results.push("cf_cameras created")
-
-      await prisma.$executeRawUnsafe(`
-        CREATE TABLE cf_feeders (
-          id TEXT PRIMARY KEY,
-          community_id TEXT NOT NULL REFERENCES cf_communities(id),
-          name TEXT NOT NULL,
-          type TEXT NOT NULL DEFAULT 'SIMULATED',
-          status TEXT NOT NULL DEFAULT 'OFFLINE',
-          created_at TIMESTAMP DEFAULT NOW(),
-          updated_at TIMESTAMP DEFAULT NOW()
-        )
-      `)
-      results.push("cf_feeders created")
-
-      await prisma.$executeRawUnsafe(`
-        CREATE TABLE cf_system_configs (
-          id TEXT PRIMARY KEY,
-          key TEXT UNIQUE NOT NULL,
-          value TEXT NOT NULL,
-          label TEXT,
-          updated_at TIMESTAMP DEFAULT NOW()
-        )
-      `)
-      results.push("cf_system_configs created")
-
-      await prisma.$executeRawUnsafe(`
-        CREATE TABLE cf_feed_logs (
-          id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL REFERENCES cf_users(id),
-          camera_id TEXT NOT NULL REFERENCES cf_cameras(id),
-          feeder_id TEXT NOT NULL REFERENCES cf_feeders(id),
-          amount INTEGER DEFAULT 1,
-          created_at TIMESTAMP DEFAULT NOW()
-        )
-      `)
-      results.push("cf_feed_logs created")
-
-      await prisma.$executeRawUnsafe(`
-        CREATE INDEX idx_cf_feed_logs_user_id ON cf_feed_logs(user_id)
-      `)
-      await prisma.$executeRawUnsafe(`
-        CREATE INDEX idx_cf_feed_logs_camera_id ON cf_feed_logs(camera_id)
-      `)
-      await prisma.$executeRawUnsafe(`
-        CREATE INDEX idx_cf_feed_logs_created_at ON cf_feed_logs(created_at)
-      `)
-      results.push("Indexes created")
-
+      // 使用 prisma db push 同步 schema（无需迁移文件，兼容 Vercel 环境）
+      execSync("npx prisma db push --skip-generate", {
+        stdio: "pipe",
+        env: { ...process.env, DATABASE_URL: url },
+      })
+      results.push("Schema pushed via prisma db push")
     } catch (e: any) {
-      console.error("Failed to create tables:", e)
+      console.error("[init] Schema push failed:", e.message)
       await prisma.$disconnect()
       throw new Error(`Database initialization failed: ${e.message}`)
     }
@@ -210,35 +111,89 @@ export async function initializeDatabase() {
       },
     })
 
-    await prisma.camera.createMany({
-      data: [
-        {
-          communityId: c1.id,
-          name: "花园全景摄像头",
-          streamUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          status: "ONLINE",
-        },
-        {
-          communityId: c1.id,
-          name: "喂食区摄像头",
-          streamUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          status: "ONLINE",
-        },
-        {
-          communityId: c2.id,
-          name: "公园主摄像头",
-          streamUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          status: "ONLINE",
-        },
-      ],
-    })
+    await prisma.$transaction([
+      prisma.camera.createMany({
+        data: [
+          {
+            communityId: c1.id,
+            name: "花园全景摄像头",
+            streamUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+            status: "ONLINE",
+          },
+          {
+            communityId: c1.id,
+            name: "喂食区摄像头",
+            streamUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+            status: "ONLINE",
+          },
+          {
+            communityId: c2.id,
+            name: "公园主摄像头",
+            streamUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+            status: "ONLINE",
+          },
+        ],
+      }),
+      prisma.feeder.createMany({
+        data: [
+          { communityId: c1.id, name: "1号投喂器", type: "SIMULATED", status: "ONLINE" },
+          { communityId: c2.id, name: "2号投喂器", type: "SIMULATED", status: "ONLINE" },
+          {
+            communityId: c1.id,
+            name: "HTTP 示例投喂器",
+            type: "HTTP",
+            status: "OFFLINE",
+            httpConfig: JSON.stringify({
+              url: "https://httpbin.org/post",
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: { action: "feed", amount: "{{amount}}", device: "demo-feeder" },
+              validate: { field: "json.action", equals: "feed", error: "验证失败" },
+              timeout: 10000,
+            }),
+          },
+          {
+            communityId: c2.id,
+            name: "YAML 示例投喂器",
+            type: "YAML",
+            status: "OFFLINE",
+            yamlConfig: `name: "YAML 示例投喂器"
+description: "多阶段投喂示例 (使用 httpbin.org 测试)"
 
-    await prisma.feeder.createMany({
-      data: [
-        { communityId: c1.id, name: "1号投喂器", type: "SIMULATED", status: "ONLINE" },
-        { communityId: c2.id, name: "2号投喂器", type: "SIMULATED", status: "ONLINE" },
-      ],
-    })
+env:
+  BASE_URL: "https://httpbin.org"
+
+stages:
+  - name: "检查状态"
+    request:
+      url: "{{BASE_URL}}/get"
+      method: GET
+    validate:
+      - field: "url"
+        contains: "httpbin"
+        error: "服务不可用"
+    extract:
+      server_url: "url"
+
+  - name: "执行投喂"
+    request:
+      url: "{{BASE_URL}}/post"
+      method: POST
+      headers:
+        Content-Type: "application/json"
+      body:
+        action: "feed"
+        amount: "{{amount}}"
+        server: "{{server_url}}"
+    validate:
+      - field: "json.action"
+        equals: "feed"
+        error: "投喂失败"
+`,
+          },
+        ],
+      }),
+    ])
 
     results.push("Seed data created: 2 communities, 3 cameras, 2 feeders")
   } else {
@@ -246,5 +201,6 @@ export async function initializeDatabase() {
   }
 
   await prisma.$disconnect()
+  dbInitialized = true
   return results
 }

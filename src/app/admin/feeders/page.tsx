@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { DataTable, Column } from "@/components/admin/DataTable"
-import { FormDialog, FormField } from "@/components/admin/FormDialog"
+import { FeederForm } from "@/components/admin/FeederForm"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
@@ -14,6 +14,8 @@ interface Feeder {
   status: string
   community: { name: string }
   communityId: string
+  httpConfig?: string | null
+  yamlConfig?: string | null
 }
 
 interface Community {
@@ -38,37 +40,7 @@ export default function FeedersPage() {
 
   useEffect(() => { fetchData() }, [])
 
-  const formFields: FormField[] = [
-    {
-      name: "communityId",
-      label: "所属社区",
-      type: "select",
-      required: true,
-      options: communities.map((c) => ({ value: c.id, label: c.name })),
-    },
-    { name: "name", label: "投喂器名称", required: true, placeholder: "输入名称" },
-    {
-      name: "type",
-      label: "类型",
-      type: "select",
-      options: [
-        { value: "SIMULATED", label: "模拟" },
-        { value: "REAL", label: "真实设备" },
-      ],
-    },
-    {
-      name: "status",
-      label: "状态",
-      type: "select",
-      options: [
-        { value: "ONLINE", label: "在线" },
-        { value: "OFFLINE", label: "离线" },
-        { value: "MAINTENANCE", label: "维护中" },
-      ],
-    },
-  ]
-
-  const handleSubmit = async (formData: Record<string, any>) => {
+  const handleSubmit = async (formData: Record<string, string | null>) => {
     const url = editing
       ? `/api/admin/feeders/${editing.id}`
       : "/api/admin/feeders"
@@ -93,6 +65,24 @@ export default function FeedersPage() {
     fetchData()
   }
 
+  const typeLabel = (type: string) => {
+    switch (type) {
+      case "SIMULATED": return "模拟"
+      case "HTTP": return "HTTP"
+      case "YAML": return "YAML"
+      default: return type
+    }
+  }
+
+  const typeVariant = (type: string) => {
+    switch (type) {
+      case "SIMULATED": return "secondary" as const
+      case "HTTP": return "default" as const
+      case "YAML": return "default" as const
+      default: return "secondary" as const
+    }
+  }
+
   const columns: Column<Feeder>[] = [
     { key: "name", label: "名称" },
     { key: "community", label: "社区", render: (item) => item.community.name },
@@ -100,8 +90,8 @@ export default function FeedersPage() {
       key: "type",
       label: "类型",
       render: (item) => (
-        <Badge variant={item.type === "SIMULATED" ? "secondary" : "default"}>
-          {item.type === "SIMULATED" ? "模拟" : "真实"}
+        <Badge variant={typeVariant(item.type)}>
+          {typeLabel(item.type)}
         </Badge>
       ),
     },
@@ -110,9 +100,26 @@ export default function FeedersPage() {
       label: "状态",
       render: (item) => (
         <Badge variant={item.status === "ONLINE" ? "default" : "secondary"}>
-          {item.status === "ONLINE" ? "在线" : "离线"}
+          {item.status === "ONLINE" ? "在线" : item.status === "OFFLINE" ? "离线" : "维护"}
         </Badge>
       ),
+    },
+    {
+      key: "config",
+      label: "配置",
+      render: (item) => {
+        if (item.type === "SIMULATED") return <span className="text-xs text-muted-foreground">-</span>
+        if (item.type === "HTTP" && item.httpConfig) {
+          try {
+            const cfg = JSON.parse(item.httpConfig)
+            return <span className="text-xs truncate block max-w-[200px]">{cfg.method} {cfg.url}</span>
+          } catch { return <span className="text-xs text-red-500">配置错误</span> }
+        }
+        if (item.type === "YAML" && item.yamlConfig) {
+          return <span className="text-xs text-green-600">已配置</span>
+        }
+        return <span className="text-xs text-orange-500">未配置</span>
+      },
     },
   ]
 
@@ -132,18 +139,12 @@ export default function FeedersPage() {
         onDelete={handleDelete}
       />
 
-      <FormDialog
+      <FeederForm
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         title={editing ? "编辑投喂器" : "添加投喂器"}
-        fields={formFields}
-        initialData={editing ? {
-          id: editing.id,
-          name: editing.name,
-          type: editing.type,
-          status: editing.status,
-          communityId: editing.communityId,
-        } : undefined}
+        communities={communities}
+        initialData={editing || undefined}
         onSubmit={handleSubmit}
       />
     </div>

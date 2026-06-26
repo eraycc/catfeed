@@ -41,11 +41,8 @@ COPY --from=deps /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=deps /app/node_modules/prisma ./node_modules/prisma
 COPY --from=deps /app/node_modules/.bin ./node_modules/.bin
 COPY --from=deps /app/node_modules/bcryptjs ./node_modules/bcryptjs
-COPY --from=deps /app/node_modules/prisma ./node_modules/prisma
 COPY --from=deps /app/prisma ./prisma
 COPY --from=deps /app/package.json ./package.json
-
-COPY scripts ./scripts
 
 COPY --from=builder /app/public ./public
 
@@ -64,4 +61,4 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["sh", "-c", "./node_modules/.bin/prisma db push --skip-generate && node scripts/init-admin.js && node server.js"]
+CMD ["sh", "-c", "./node_modules/.bin/prisma db push --skip-generate && node server.js"]

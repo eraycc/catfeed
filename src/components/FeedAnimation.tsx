@@ -1,5 +1,3 @@
-"use client"
-
 export function FeedAnimation() {
   return (
     <div className="fixed inset-0 pointer-events-none flex items-center justify-center z-50">

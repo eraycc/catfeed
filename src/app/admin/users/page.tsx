@@ -99,12 +99,9 @@ export default function UsersPage() {
 
   const handleToggleActive = async (item: User) => {
     const res = await fetch(`/api/admin/users/${item.id}`, {
-      method: "PUT",
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: item.name,
-        email: item.email,
-        role: item.role,
         isActive: !item.isActive,
       }),
     })

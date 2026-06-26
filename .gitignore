@@ -39,3 +39,6 @@ docker-compose.yml
 
 # docs
 docs/
+*.log
+.remember/
+CLAUDE.md

@@ -58,6 +58,8 @@ model Feeder {
   name        String
   type        FeederType    @default(SIMULATED)
   status      FeederStatus  @default(OFFLINE)
+  httpConfig  String?       @map("http_config") @db.Text
+  yamlConfig  String?       @map("yaml_config") @db.Text
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
   feedLogs    FeedLog[]
@@ -111,5 +113,6 @@ enum FeederStatus {
 
 enum FeederType {
   SIMULATED
-  REAL
+  HTTP
+  YAML
 }

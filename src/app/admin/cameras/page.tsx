@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { DataTable, Column } from "@/components/admin/DataTable"
 import { FormDialog, FormField } from "@/components/admin/FormDialog"
 import { Button } from "@/components/ui/button"
@@ -38,7 +38,7 @@ export default function CamerasPage() {
 
   useEffect(() => { fetchData() }, [])
 
-  const formFields: FormField[] = [
+  const formFields: FormField[] = useMemo(() => [
     {
       name: "communityId",
       label: "所属社区",
@@ -58,7 +58,7 @@ export default function CamerasPage() {
         { value: "MAINTENANCE", label: "维护中" },
       ],
     },
-  ]
+  ], [communities])
 
   const handleSubmit = async (formData: Record<string, string | number | boolean | null>) => {
     const url = editing

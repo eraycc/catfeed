@@ -1,0 +1,296 @@
+# ============================================================
+# CatFeed 喂食器 YAML 规则配置教程
+# ============================================================
+# 本文档介绍如何使用 YAML 格式配置喂食器的智能投喂规则
+# 支持多阶段请求、变量传递、响应验证、错误中止等功能
+# ============================================================
+
+
+# ============================================================
+# 一、变量引用语法
+# ============================================================
+#
+# 在请求的 URL、Headers、Body 中可以使用 {{变量名}} 引用变量
+#
+# 系统变量 (自动传入):
+#   {{amount}}   - 投喂量，默认 1
+#
+# 环境变量 (在 env 中定义):
+#   {{env.TOKEN}}     → 引用 env.TOKEN
+#   {{BASE_URL}}      → 引用 env.BASE_URL (env 顶层键可直接引用)
+#
+# 阶段提取变量 (在某阶段 extract 中定义，后续阶段可用):
+#   {{device_status}} → 引用前面阶段提取的 device_status 变量
+#
+# 变量优先级: 系统变量 < env 变量 < 阶段提取变量 (同名时后者覆盖前者)
+
+
+# ============================================================
+# 二、完整模板
+# ============================================================
+
+name: "投喂器名称"                    # 可选，描述性名称
+description: "投喂器描述"              # 可选
+
+# 环境变量 —— 存储 API 地址、Token 等配置
+env:
+  BASE_URL: "https://feeder-api.example.com/v1"
+  TOKEN: "your-api-token-here"
+  DEVICE_ID: "feeder-001"
+
+# 多阶段执行流程 —— 按数组顺序依次执行
+stages:
+  - name: "阶段名称"                   # 可选，用于日志标识
+    request:
+      url: "{{BASE_URL}}/endpoint"     # 请求地址 (支持变量)
+      method: GET                      # HTTP 方法 (GET/POST/PUT/PATCH/DELETE)
+      headers:                         # 请求头 (可选，支持变量)
+        Authorization: "Bearer {{TOKEN}}"
+        Accept: "application/json"
+      body:                            # 请求体 (可选，POST/PUT/PATCH 时生效，支持变量)
+        key: "value"
+        amount: "{{amount}}"
+
+    # 验证响应 —— 可选，不通过则停止执行并记录日志
+    validate:
+      - field: "status"                # 响应 JSON 字段路径 (支持点号: data.status)
+        equals: "online"               # 期望值
+        error: "设备离线"              # 验证失败时的用户提示
+
+    # 提取字段 —— 可选，从响应中提取值存为变量供后续阶段使用
+    extract:
+      variable_name: "response_field"  # 提取响应中的字段，存为 {{variable_name}}
+      nested_var: "data.nested.field"  # 支持嵌套路径
+
+
+# ============================================================
+# 三、验证操作符参考
+# ============================================================
+#
+# 在 validate 数组中，每个规则支持以下操作符:
+#
+#   equals: value       等于
+#   not_equals: value   不等于
+#   gte: number         大于等于
+#   lte: number         小于等于
+#   gt: number          大于
+#   lt: number          小于
+#   contains: "str"     字符串包含
+#   in: [v1, v2, v3]    值在列表中
+#
+# 多个操作符可以组合使用 (AND 关系):
+#   - field: "temperature"
+#     gte: 0
+#     lte: 50
+#     error: "温度超出安全范围"
+#
+# 如果不写 validate，该阶段执行后直接进入下一阶段
+
+
+# ============================================================
+# 四、执行流程说明
+# ============================================================
+#
+# 对每个 stage 按顺序执行:
+#
+#   1. 变量替换: 将 URL、Headers、Body 中的 {{var}} 替换为实际值
+#
+#   2. 发起请求: 使用替换后的参数发送 HTTP 请求 (超时 10 秒)
+#
+#   3. 验证响应 (如果有 validate):
+#      - 验证每个规则
+#      - 任一规则失败:
+#        → 记录完整请求和响 应到服务端日志 (方便排查)
+#        → 停止后续阶段执行
+#        → 返回错误信息给用户
+#
+#   4. 提取变量 (如果有 extract):
+#      - 从响应 JSON 中按路径提取字段
+#      - 存入变量池，后续阶段可通过 {{变量名}} 引用
+#
+#   5. 继续下一阶段 (如果还有)
+#
+# 全部阶段完成 → 返回成功
+
+
+# ============================================================
+# 五、示例: 简单投喂 (单阶段)
+# ============================================================
+# 最简单的配置，直接发送投喂请求
+
+name: "简单投喂器"
+env:
+  API_URL: "https://feeder.example.com"
+  API_KEY: "my-secret-key"
+
+stages:
+  - name: "投喂"
+    request:
+      url: "{{API_URL}}/feed"
+      method: POST
+      headers:
+        Authorization: "Bearer {{API_KEY}}"
+        Content-Type: "application/json"
+      body:
+        device: "feeder-001"
+        amount: "{{amount}}"
+    validate:
+      - field: "code"
+        equals: 200
+        error: "投喂失败，请稍后重试"
+
+
+# ============================================================
+# 六、示例: 带预检查的智能投喂 (多阶段)
+# ============================================================
+# 先检查设备状态和余量，全部通过后再执行投喂
+
+name: "智能投喂器"
+description: "带状态检查和余量验证的多阶段投喂流程"
+
+env:
+  BASE_URL: "https://smart-feeder.example.com/api"
+  TOKEN: "your-api-token"
+  DEVICE: "feeder-001"
+
+stages:
+  # ── 阶段1: 检查设备是否在线 ──
+  - name: "检查设备状态"
+    request:
+      url: "{{BASE_URL}}/device/{{DEVICE}}/status"
+      method: GET
+      headers:
+        Authorization: "Bearer {{TOKEN}}"
+    validate:
+      - field: "status"
+        equals: "online"
+        error: "设备离线，暂时无法投喂"
+    extract:
+      firmware: "firmware_version"    # 提取固件版本，后续阶段可用
+      signal: "signal_strength"       # 提取信号强度
+
+  # ── 阶段2: 检查投喂器余量 ──
+  - name: "检查余量"
+    request:
+      url: "{{BASE_URL}}/device/{{DEVICE}}/capacity"
+      method: GET
+      headers:
+        Authorization: "Bearer {{TOKEN}}"
+    validate:
+      - field: "remaining"
+        gte: 1
+        error: "投喂器余量不足，请联系管理员补充"
+    extract:
+      remaining: "remaining"          # 提取剩余量
+
+  # ── 阶段3: 检查冷却时间 ──
+  - name: "检查冷却时间"
+    request:
+      url: "{{BASE_URL}}/device/{{DEVICE}}/last-feed"
+      method: GET
+      headers:
+        Authorization: "Bearer {{TOKEN}}"
+    validate:
+      - field: "seconds_since_last"
+        gte: 300
+        error: "距离上次投喂时间太短，请 5 分钟后再试"
+
+  # ── 阶段4: 执行投喂 ──
+  - name: "执行投喂"
+    request:
+      url: "{{BASE_URL}}/device/{{DEVICE}}/feed"
+      method: POST
+      headers:
+        Authorization: "Bearer {{TOKEN}}"
+        Content-Type: "application/json"
+        X-Firmware: "{{firmware}}"     # 引用阶段1提取的固件版本
+      body:
+        device_id: "{{DEVICE}}"
+        amount: "{{amount}}"
+        remaining_before: "{{remaining}}"  # 引用阶段2提取的剩余量
+    validate:
+      - field: "success"
+        equals: true
+        error: "投喂指令发送失败，请稍后重试"
+    extract:
+      feed_id: "feed_id"              # 提取投喂记录 ID
+
+
+# ============================================================
+# 七、示例: 带条件判断的复杂流程
+# ============================================================
+# 根据设备状态决定不同行为
+
+name: "条件判断投喂器"
+
+env:
+  API: "https://complex-feeder.example.com"
+  KEY: "secret"
+
+stages:
+  - name: "获取设备完整状态"
+    request:
+      url: "{{API}}/device/status"
+      method: GET
+      headers:
+        X-API-Key: "{{KEY}}"
+    extract:
+      mode: "data.mode"
+      battery: "data.battery"
+      food_level: "data.food_level"
+
+  - name: "检查电量"
+    request:
+      url: "{{API}}/check"           # 有些阶段可以发一个轻量请求
+      method: GET                     # 仅用于触发验证
+    validate:
+      - field: "battery"              # 注意: 这里验证的是上一阶段提取的变量
+        gte: 20                       # 但 validate 作用于当前响应
+        error: "设备电量过低 ({{battery}}%)，请先充电"
+        # 注: error 消息中也可以使用变量
+
+  - name: "执行投喂"
+    request:
+      url: "{{API}}/feed"
+      method: POST
+      headers:
+        X-API-Key: "{{KEY}}"
+        Content-Type: "application/json"
+      body:
+        mode: "{{mode}}"              # 使用阶段1提取的模式
+        amount: "{{amount}}"
+    validate:
+      - field: "result"
+        not_equals: "error"
+        error: "投喂执行异常"
+
+
+# ============================================================
+# 八、常见问题
+# ============================================================
+#
+# Q: 如何调试配置?
+# A: 投喂失败时，服务端日志会记录失败阶段的完整请求和响应，
+#    查看 Docker 日志或 Vercel Functions 日志即可排查。
+#
+# Q: 超时时间是多少?
+# A: 每个阶段的请求超时为 10 秒。
+#
+# Q: 某个阶段没有 validate，会怎样?
+# A: 跳过验证，直接进入下一阶段。如果是最后一个阶段则执行结束。
+#
+# Q: extract 的变量名可以和 env 中的同名吗?
+# A: 可以，但阶段提取的变量会覆盖 env 中的同名变量。
+#
+# Q: body 中如何传递数组?
+# A: YAML 原生支持数组语法:
+#    body:
+#      items:
+#        - "item1"
+#        - "item2"
+#
+# Q: 如何发送 form-urlencoded 请求?
+# A: 在 headers 中指定 Content-Type:
+#    headers:
+#      Content-Type: "application/x-www-form-urlencoded"
+#    body: "key1=value1&key2=value2"

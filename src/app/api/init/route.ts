@@ -3,15 +3,24 @@ import { db } from "@/lib/db"
 
 export async function POST() {
   try {
+    // 检查是否已完成初始化 —— 若管理员和社区数据均存在则禁用此端点
+    const adminEmail = process.env.ADMIN_EMAIL || "admin@example.com"
+    const [existingAdmin, communityCount] = await Promise.all([
+      db.user.findUnique({ where: { email: adminEmail } }),
+      db.community.count(),
+    ])
+
+    if (existingAdmin && communityCount > 0) {
+      return NextResponse.json(
+        { error: "系统已初始化，此端点已禁用" },
+        { status: 403 }
+      )
+    }
+
     const results: string[] = []
 
     // 1. 创建管理员（如果不存在）
-    const adminEmail = process.env.ADMIN_EMAIL || "admin@example.com"
     const adminPassword = process.env.ADMIN_PASSWORD || "admin123456"
-
-    const existingAdmin = await db.user.findUnique({
-      where: { email: adminEmail },
-    })
 
     if (!existingAdmin) {
       const bcrypt = await import("bcryptjs")
@@ -47,7 +56,6 @@ export async function POST() {
     results.push("System configs initialized")
 
     // 3. 创建种子数据（如果不存在）
-    const communityCount = await db.community.count()
     if (communityCount === 0) {
       const c1 = await db.community.create({
         data: {
@@ -65,35 +73,36 @@ export async function POST() {
         },
       })
 
-      await db.camera.createMany({
-        data: [
-          {
-            communityId: c1.id,
-            name: "花园全景摄像头",
-            streamUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-            status: "ONLINE",
-          },
-          {
-            communityId: c1.id,
-            name: "喂食区摄像头",
-            streamUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-            status: "ONLINE",
-          },
-          {
-            communityId: c2.id,
-            name: "公园主摄像头",
-            streamUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-            status: "ONLINE",
-          },
-        ],
-      })
-
-      await db.feeder.createMany({
-        data: [
-          { communityId: c1.id, name: "1号投喂器", type: "SIMULATED", status: "ONLINE" },
-          { communityId: c2.id, name: "2号投喂器", type: "SIMULATED", status: "ONLINE" },
-        ],
-      })
+      await db.$transaction([
+        db.camera.createMany({
+          data: [
+            {
+              communityId: c1.id,
+              name: "花园全景摄像头",
+              streamUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+              status: "ONLINE",
+            },
+            {
+              communityId: c1.id,
+              name: "喂食区摄像头",
+              streamUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+              status: "ONLINE",
+            },
+            {
+              communityId: c2.id,
+              name: "公园主摄像头",
+              streamUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+              status: "ONLINE",
+            },
+          ],
+        }),
+        db.feeder.createMany({
+          data: [
+            { communityId: c1.id, name: "1号投喂器", type: "SIMULATED", status: "ONLINE" },
+            { communityId: c2.id, name: "2号投喂器", type: "SIMULATED", status: "ONLINE" },
+          ],
+        }),
+      ])
 
       results.push("Seed data created: 2 communities, 3 cameras, 2 feeders")
     } else {
@@ -101,7 +110,11 @@ export async function POST() {
     }
 
     return NextResponse.json({ success: true, results })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (e) {
+    console.error("[init] 初始化失败:", e)
+    return NextResponse.json(
+      { error: "初始化失败，请检查数据库连接和环境变量配置" },
+      { status: 500 }
+    )
   }
 }

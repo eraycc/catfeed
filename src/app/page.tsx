@@ -1,13 +1,10 @@
 import { db } from "@/lib/db"
-import { initializeDatabase } from "@/lib/init"
 import { Header } from "@/components/Header"
 import { CommunityCard } from "@/components/CommunityCard"
 
 export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
-  await initializeDatabase()
-
   const communities = await db.community.findMany({
     where: { isActive: true },
     include: {

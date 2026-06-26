@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
+import { executeHttpFeed, parseYamlConfig, executeStages } from "@/lib/feeder-engine"
 
 export async function POST(req: Request) {
   try {
@@ -106,10 +107,28 @@ export async function POST(req: Request) {
     if (feeder.type === "SIMULATED") {
       // 模拟投喂器 - 仅记录日志
       console.log(`[SIMULATED] User ${session.user.id} fed via feeder ${feederId}`)
-    } else if (feeder.type === "REAL") {
-      // 真实投喂器 - 这里可以添加实际的硬件控制逻辑
-      // 例如：发送 MQTT 消息到投喂器硬件
-      console.log(`[REAL] User ${session.user.id} triggered feeder ${feederId}`)
+    } else if (feeder.type === "HTTP") {
+      // HTTP 请求投喂器
+      if (!feeder.httpConfig) {
+        return NextResponse.json({ error: "投喂器未配置 HTTP 请求" }, { status: 400 })
+      }
+      const config = JSON.parse(feeder.httpConfig)
+      const result = await executeHttpFeed(config, { amount: "1" })
+      if (!result.success) {
+        return NextResponse.json({ error: result.error }, { status: 400 })
+      }
+      console.log(`[HTTP] User ${session.user.id} fed via feeder ${feederId}`)
+    } else if (feeder.type === "YAML") {
+      // YAML 智能规则投喂器
+      if (!feeder.yamlConfig) {
+        return NextResponse.json({ error: "投喂器未配置 YAML 规则" }, { status: 400 })
+      }
+      const config = parseYamlConfig(feeder.yamlConfig)
+      const result = await executeStages(config.stages, config.env || {}, { amount: "1" })
+      if (!result.success) {
+        return NextResponse.json({ error: result.error }, { status: 400 })
+      }
+      console.log(`[YAML] User ${session.user.id} fed via feeder ${feederId}`)
     }
 
     const feedLog = await db.feedLog.create({
