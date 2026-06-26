@@ -1,6 +1,3 @@
-import { execSync } from "child_process"
-import path from "path"
-
 let dbInitialized = false
 
 export async function initializeDatabase() {
@@ -36,18 +33,12 @@ export async function initializeDatabase() {
     },
   })
 
-  // 每次启动都同步 schema（prisma db push 是幂等的，已有表/列会跳过）
-  // 使用 node_modules 中的 prisma 二进制文件，不使用 npx（Vercel 运行时无法下载包）
+  // 同步 schema：确保所有表和列存在
   try {
-    console.log("[init] Syncing database schema...")
-    const prismaBin = path.join(process.cwd(), "node_modules", ".bin", "prisma")
-    execSync(`"${prismaBin}" db push --skip-generate`, {
-      stdio: "pipe",
-      env: { ...process.env, DATABASE_URL: url },
-    })
-    results.push("Schema synced via prisma db push")
+    await syncSchema(prisma)
+    results.push("Schema synced")
   } catch (e: any) {
-    console.error("[init] Schema push failed:", e.message)
+    console.error("[init] Schema sync failed:", e.message)
     await prisma.$disconnect()
     throw new Error(`Database initialization failed: ${e.message}`)
   }
@@ -201,4 +192,101 @@ stages:
   await prisma.$disconnect()
   dbInitialized = true
   return results
+}
+
+/**
+ * 同步数据库 schema：检查表和列是否存在，缺失则创建/添加
+ * 使用 Prisma Client 的 $executeRawUnsafe 直接执行 SQL，不依赖 CLI
+ */
+async function syncSchema(prisma: any) {
+  // 1. 确保所有表存在
+  const tables = [
+    {
+      name: "cf_communities",
+      sql: `CREATE TABLE cf_communities (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, location TEXT,
+        cover_image TEXT, is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()
+      )`,
+    },
+    {
+      name: "cf_users",
+      sql: `CREATE TABLE cf_users (
+        id TEXT PRIMARY KEY, email TEXT UNIQUE NOT NULL, password_hash TEXT,
+        name TEXT, role TEXT NOT NULL DEFAULT 'USER', is_active BOOLEAN DEFAULT TRUE,
+        avatar_url TEXT, created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()
+      )`,
+    },
+    {
+      name: "cf_cameras",
+      sql: `CREATE TABLE cf_cameras (
+        id TEXT PRIMARY KEY, community_id TEXT NOT NULL REFERENCES cf_communities(id),
+        name TEXT NOT NULL, stream_url TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'OFFLINE',
+        created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()
+      )`,
+    },
+    {
+      name: "cf_feeders",
+      sql: `CREATE TABLE cf_feeders (
+        id TEXT PRIMARY KEY, community_id TEXT NOT NULL REFERENCES cf_communities(id),
+        name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'SIMULATED',
+        status TEXT NOT NULL DEFAULT 'OFFLINE',
+        http_config TEXT, yaml_config TEXT,
+        created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()
+      )`,
+    },
+    {
+      name: "cf_system_configs",
+      sql: `CREATE TABLE cf_system_configs (
+        id TEXT PRIMARY KEY, key TEXT UNIQUE NOT NULL, value TEXT NOT NULL,
+        label TEXT, updated_at TIMESTAMP DEFAULT NOW()
+      )`,
+    },
+    {
+      name: "cf_feed_logs",
+      sql: `CREATE TABLE cf_feed_logs (
+        id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES cf_users(id),
+        camera_id TEXT NOT NULL REFERENCES cf_cameras(id),
+        feeder_id TEXT NOT NULL REFERENCES cf_feeders(id),
+        amount INTEGER DEFAULT 1, created_at TIMESTAMP DEFAULT NOW()
+      )`,
+    },
+  ]
+
+  for (const table of tables) {
+    try {
+      await prisma.$executeRawUnsafe(`SELECT 1 FROM ${table.name} LIMIT 1`)
+    } catch {
+      // 表不存在，创建它
+      console.log(`[init] Creating table ${table.name}...`)
+      await prisma.$executeRawUnsafe(table.sql)
+    }
+  }
+
+  // 2. 确保 cf_feeders 表有 http_config 和 yaml_config 列（兼容旧数据库）
+  try {
+    await prisma.$executeRawUnsafe(`SELECT http_config FROM cf_feeders LIMIT 1`)
+  } catch {
+    console.log("[init] Adding column cf_feeders.http_config...")
+    await prisma.$executeRawUnsafe(`ALTER TABLE cf_feeders ADD COLUMN http_config TEXT`)
+  }
+
+  try {
+    await prisma.$executeRawUnsafe(`SELECT yaml_config FROM cf_feeders LIMIT 1`)
+  } catch {
+    console.log("[init] Adding column cf_feeders.yaml_config...")
+    await prisma.$executeRawUnsafe(`ALTER TABLE cf_feeders ADD COLUMN yaml_config TEXT`)
+  }
+
+  // 3. 确保索引存在
+  const indexes = [
+    { name: "idx_cf_feed_logs_user_id", sql: `CREATE INDEX IF NOT EXISTS idx_cf_feed_logs_user_id ON cf_feed_logs(user_id)` },
+    { name: "idx_cf_feed_logs_camera_id", sql: `CREATE INDEX IF NOT EXISTS idx_cf_feed_logs_camera_id ON cf_feed_logs(camera_id)` },
+    { name: "idx_cf_feed_logs_created_at", sql: `CREATE INDEX IF NOT EXISTS idx_cf_feed_logs_created_at ON cf_feed_logs(created_at)` },
+  ]
+
+  for (const idx of indexes) {
+    await prisma.$executeRawUnsafe(idx.sql)
+  }
 }

@@ -1,21 +1,28 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { execSync } from "child_process"
-import path from "path"
 
 export async function POST() {
   try {
     const results: string[] = []
 
-    // 1. 始终先同步数据库 schema（prisma db push 是幂等的，已有表/列会跳过）
-    const dbUrl = process.env.DATABASE_URL || ""
+    // 1. 同步 schema：添加缺失的列
     try {
-      const prismaBin = path.join(process.cwd(), "node_modules", ".bin", "prisma")
-      execSync(`"${prismaBin}" db push --skip-generate`, {
-        stdio: "pipe",
-        env: { ...process.env, DATABASE_URL: dbUrl },
-      })
-      results.push("Schema synced")
+      // 确保 cf_feeders 表有 http_config 和 yaml_config 列
+      try {
+        await db.$executeRawUnsafe(`SELECT http_config FROM cf_feeders LIMIT 1`)
+      } catch {
+        await db.$executeRawUnsafe(`ALTER TABLE cf_feeders ADD COLUMN http_config TEXT`)
+        results.push("Added column http_config")
+      }
+      try {
+        await db.$executeRawUnsafe(`SELECT yaml_config FROM cf_feeders LIMIT 1`)
+      } catch {
+        await db.$executeRawUnsafe(`ALTER TABLE cf_feeders ADD COLUMN yaml_config TEXT`)
+        results.push("Added column yaml_config")
+      }
+      if (results.length === 0) {
+        results.push("Schema already up to date")
+      }
     } catch (e: any) {
       console.error("[init] Schema sync failed:", e.message)
       return NextResponse.json(
@@ -24,7 +31,7 @@ export async function POST() {
       )
     }
 
-    // 2. 检查是否已完成初始化 —— 若管理员和社区数据均存在则跳过
+    // 2. 检查是否已完成初始化
     const adminEmail = process.env.ADMIN_EMAIL || "admin@example.com"
     const [existingAdmin, communityCount] = await Promise.all([
       db.user.findUnique({ where: { email: adminEmail } }),
@@ -34,12 +41,12 @@ export async function POST() {
     if (existingAdmin && communityCount > 0) {
       return NextResponse.json({
         success: true,
-        message: "系统已初始化，仅执行了 schema 同步",
+        message: "系统已初始化",
         results,
       })
     }
 
-    // 3. 创建管理员（如果不存在）
+    // 3. 创建管理员
     const adminPassword = process.env.ADMIN_PASSWORD || "admin123456"
 
     if (!existingAdmin) {
@@ -75,7 +82,7 @@ export async function POST() {
     }
     results.push("System configs initialized")
 
-    // 5. 创建种子数据（如果不存在）
+    // 5. 创建种子数据
     if (communityCount === 0) {
       const c1 = await db.community.create({
         data: {
