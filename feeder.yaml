@@ -1,268 +1,272 @@
 # ============================================================
-# CatFeed 喂食器 YAML 规则配置教程
+# CatFeed 喂食器 YAML 规则配置 (v2)
 # ============================================================
-# 本文档介绍如何使用 YAML 格式配置喂食器的智能投喂规则
-# 支持多阶段请求、变量传递、响应验证、错误中止等功能
+# 阶段执行顺序: 请求 → extract → validate → set(写result)
+# 兼容 Vercel Serverless: 全流程受 max_duration 时间预算约束
+# 向后兼容: 旧版字段(平铺 validate 数组、extract 简写)仍可用
 # ============================================================
-
-
-# ============================================================
-# 一、变量引用语法
-# ============================================================
-#
-# 在请求的 URL、Headers、Body 中可以使用 {{变量名}} 引用变量
-#
-# 系统变量 (自动传入):
-#   {{amount}}   - 投喂量，默认 1
-#
-# 环境变量 (在 env 中定义):
-#   {{env.TOKEN}}     → 引用 env.TOKEN
-#   {{BASE_URL}}      → 引用 env.BASE_URL (env 顶层键可直接引用)
-#
-# 阶段提取变量 (在某阶段 extract 中定义，后续阶段可用):
-#   {{device_status}} → 引用前面阶段提取的 device_status 变量
-#
-# 变量优先级: 系统变量 < env 变量 < 阶段提取变量 (同名时后者覆盖前者)
 
 
 # ============================================================
-# 二、完整模板
+# 一、完整模板
 # ============================================================
 
-name: "投喂器名称"                    # 可选，描述性名称
-description: "投喂器描述"              # 可选
+name: "智能投喂器"                     # 可选，描述性名称
+description: "覆盖多场景的智能喂食规则"  # 可选
 
-# 环境变量 —— 存储 API 地址、Token 等配置
+# ── 全局时间预算 (毫秒) ──
+# 所有 stage 的请求+重试+间隔总和超过此值时，引擎提前中止。
+# Hobby 计划函数上限 10s，留 1s 余量。Pro 可调大。
+max_duration: 9000
+
+# ── 环境变量 ──
 env:
   BASE_URL: "https://feeder-api.example.com/v1"
-  TOKEN: "your-api-token-here"
-  DEVICE_ID: "feeder-001"
+  TOKEN: "your-api-token"
+  DEVICE: "feeder-001"
 
-# 多阶段执行流程 —— 按数组顺序依次执行
+# ── 全局默认值 (每个 stage 未显式声明时继承) ──
+defaults:
+  timeout: 10000            # 单个请求默认超时 (ms)，stage 可覆盖
+  headers:                  # 公共请求头，stage headers 会与之合并(stage 优先)
+    Authorization: "Bearer {{TOKEN}}"
+    Accept: "application/json"
+  retry:                    # 默认重试策略，stage 可覆盖
+    count: 0                # 重试次数 (0 = 不重试)
+    delay: 500              # 重试间隔 (ms)
+    on: ["network", "5xx"]  # 触发重试的情形: network / 5xx / 4xx / timeout
+
+
+# ============================================================
+# 二、变量与路径语法
+# ============================================================
+#
+# 引用变量:   {{变量名}}   或带路径 {{body.data.status}}
+#
+# 系统变量:   {{amount}}            投喂量，默认 "1"
+# env 变量:   {{TOKEN}} 或 {{env.TOKEN}}
+# 成功信息:   {{result}} 或 {{result.message}}   贯穿所有 stage，可读可写
+#
+# 每个 stage 请求后产生以下命名空间，供 extract / validate / when / set 使用:
+#   status            HTTP 状态码 (数字)
+#   headers           响应头 (键名全部小写)
+#   body              响应体 (JSON 对象 或 纯文本字符串)
+#   response          完整响应 { status, headers, body }
+#
+# 路径访问 (点号与方括号可混用):
+#   body.data.status            点号(仅限 字母/数字/下划线 的 key)
+#   body["data"]["status"]      方括号键访问
+#   body.items[0].name          数组下标
+#   headers["content-type"]     含连字符的 key 必须用方括号
+#   body.list[2]["device-id"]   混合写法
+#
+# 类型保留: 当整个字符串恰好是单个 {{path}} 时，注入原始类型(数字/布尔/对象/数组)，
+#           而非字符串。例如 amount: "{{amount}}" 在 body 中会保留为数字。
+#           若与其它文本拼接(如 "v{{ver}}")则按字符串拼接。
+
+
+# ============================================================
+# 三、stages —— 按顺序执行
+# ============================================================
+
 stages:
-  - name: "阶段名称"                   # 可选，用于日志标识
+
+  # ── 阶段1: 检查设备状态 ──
+  - name: "检查设备状态"
     request:
-      url: "{{BASE_URL}}/endpoint"     # 请求地址 (支持变量)
-      method: GET                      # HTTP 方法 (GET/POST/PUT/PATCH/DELETE)
-      headers:                         # 请求头 (可选，支持变量)
-        Authorization: "Bearer {{TOKEN}}"
-        Accept: "application/json"
-      body:                            # 请求体 (可选，POST/PUT/PATCH 时生效，支持变量)
-        key: "value"
-        amount: "{{amount}}"
+      url: "{{BASE_URL}}/device/{{DEVICE}}/status"
+      method: GET
+      # headers 继承 defaults，可在此追加/覆盖
+    timeout: 8000              # 覆盖默认超时
+    retry:
+      count: 2
+      delay: 1000
+      on: ["network", "5xx", "timeout"]
 
-    # 验证响应 —— 可选，不通过则停止执行并记录日志
-    validate:
-      - field: "status"                # 响应 JSON 字段路径 (支持点号: data.status)
-        equals: "online"               # 期望值
-        error: "设备离线"              # 验证失败时的用户提示
-
-    # 提取字段 —— 可选，从响应中提取值存为变量供后续阶段使用
+    # extract 先于 validate 执行；支持响应体、响应头、完整响应
     extract:
-      variable_name: "response_field"  # 提取响应中的字段，存为 {{variable_name}}
-      nested_var: "data.nested.field"  # 支持嵌套路径
+      dev_status:
+        from: "body.data.status"
+        required: true         # 取不到则该阶段判失败 (等价于 on_missing: "fail")
+      firmware:
+        from: "body.data.firmware"
+        default: "unknown"     # 取不到用默认值 (等价于 on_missing: "default")
+      trace_id:
+        from: 'headers["x-trace-id"]'  # 从响应头提取
+        default: ""
+      http_code:
+        from: "status"         # HTTP 状态码
+
+    # validate 可访问 extract 出来的变量；支持 and/or/not 任意嵌套
+    validate:
+      and:
+        - field: "http_code"
+          equals: 200
+        - field: "dev_status"
+          equals: "online"
+          error: "设备离线，暂时无法投喂"
+
+    # set: 写入/覆写成功信息保留变量 result
+    # 注意: set 的值中如需引用变量必须用 {{...}}，裸字符串按字面量处理
+    set:
+      result:
+        message: "设备在线 (固件 {{firmware}})"
+        device: "{{DEVICE}}"
+
+  # ── 阶段2: 检查余量与冷却 ──
+  - name: "检查余量"
+    when:                      # 条件成立才执行此阶段，否则跳过(不算失败)
+      not:
+        field: "dev_status"
+        equals: "maintenance"
+    request:
+      url: "{{BASE_URL}}/device/{{DEVICE}}/capacity"
+      method: GET
+    extract:
+      remaining:
+        from: "body.remaining"
+        default: 0
+      cooldown:
+        from: "body.seconds_since_last"
+        default: 9999
+    validate:
+      and:
+        - field: "remaining"
+          gte: 1
+          error: "投喂器余量不足，请联系管理员补充"
+        - or:                  # 余量充足 且 (冷却已过 或 是VIP)
+            - field: "cooldown"
+              gte: 300
+            - field: "body.is_vip"
+              equals: true
+          error: "距离上次投喂太短，请 5 分钟后再试"
+    set:
+      result:
+        message: "{{result.message}} | 余量 {{remaining}}"
+        remaining: "{{remaining}}"
+
+  # ── 阶段3: 执行投喂 (关键阶段) ──
+  - name: "执行投喂"
+    critical: true             # 标记为关键阶段: 存在 critical 但全部被跳过 → 整体失败
+    request:
+      url: "{{BASE_URL}}/device/{{DEVICE}}/feed"
+      method: POST
+      body_type: json          # json(默认) / form / raw
+      body:
+        device_id: "{{DEVICE}}"
+        amount: "{{amount}}"   # 类型保留为数字
+        trace: "{{trace_id}}"
+    validate:
+      and:
+        - field: "status"
+          in: [200, 201]
+        - field: "body.success"
+          equals: true
+          error: "投喂指令发送失败，请稍后重试"
+    set:
+      result:
+        message: "{{result.message}} | 投喂成功 ✓"
+        feed_id: "{{body.feed_id}}"
 
 
 # ============================================================
-# 三、验证操作符参考
+# 四、extract 的 on_missing 策略
 # ============================================================
 #
-# 在 validate 数组中，每个规则支持以下操作符:
+# 当 extract 某字段取不到值时，on_missing 决定如何处理:
 #
-#   equals: value       等于
-#   not_equals: value   不等于
-#   gte: number         大于等于
-#   lte: number         小于等于
-#   gt: number          大于
-#   lt: number          小于
-#   contains: "str"     字符串包含
-#   in: [v1, v2, v3]    值在列表中
+#   on_missing: "fail"      硬失败，中止整个流程 (required: true 的等价写法)
+#   on_missing: "default"   用 default 字段的值兜底 (默认行为)
+#   on_missing: "skip"      跳过本阶段剩余步骤，继续下一阶段 (预留)
+#   on_missing: "stop"      提前正常结束整个流程，不报错 (预留)
 #
-# 多个操作符可以组合使用 (AND 关系):
-#   - field: "temperature"
-#     gte: 0
-#     lte: 50
-#     error: "温度超出安全范围"
+# 示例:
+#   extract:
+#     token:
+#       from: "body.access_token"
+#       on_missing: "fail"          # token 必须存在
+#     optional_info:
+#       from: "body.extra.info"
+#       on_missing: "default"
+#       default: "N/A"              # 取不到用 "N/A"
+
+
+# ============================================================
+# 五、验证操作符参考
+# ============================================================
+#
+# 每个 field 规则可组合多个，组合内为 AND:
+#
+#   equals / not_equals          等于 / 不等于
+#   gt / gte / lt / lte          数值比较
+#   in: [..] / not_in: [..]      在/不在列表中
+#   contains: "str"              字符串包含 (或数组包含)
+#   starts_with / ends_with      字符串前缀 / 后缀
+#   regex: "^\\d+$"              正则匹配
+#   exists: true|false           字段存在性
+#
+# 布尔组合 (可任意嵌套):
+#   and: [ 规则或子组合, ... ]    全部满足
+#   or:  [ 规则或子组合, ... ]    任一满足
+#   not: 单个规则或子组合         取反
+#   (兼容别名: all=and, any=or)
 #
 # 如果不写 validate，该阶段执行后直接进入下一阶段
 
 
 # ============================================================
-# 四、执行流程说明
+# 六、执行流程说明
 # ============================================================
 #
 # 对每个 stage 按顺序执行:
 #
+#   0. when 检查: 条件不满足则跳过该阶段(标记 skipped，不算失败)
+#
 #   1. 变量替换: 将 URL、Headers、Body 中的 {{var}} 替换为实际值
 #
-#   2. 发起请求: 使用替换后的参数发送 HTTP 请求 (超时 10 秒)
+#   2. 发起请求: 使用替换后的参数发送 HTTP 请求 (带超时和重试)
 #
-#   3. 验证响应 (如果有 validate):
-#      - 验证每个规则
-#      - 任一规则失败:
-#        → 记录完整请求和响 应到服务端日志 (方便排查)
-#        → 停止后续阶段执行
-#        → 返回错误信息给用户
+#   3. 提取变量 (extract，先于 validate):
+#      - 从响应体/响应头/状态码中按路径提取字段
+#      - 存入变量池，本阶段和后续阶段均可通过 {{变量名}} 引用
+#      - on_missing 决定取不到时的行为
 #
-#   4. 提取变量 (如果有 extract):
-#      - 从响应 JSON 中按路径提取字段
-#      - 存入变量池，后续阶段可通过 {{变量名}} 引用
+#   4. 验证响应 (validate):
+#      - 支持 and/or/not 布尔组合
+#      - 任一规则失败 → 记录日志 → 停止后续阶段 → 返回错误
 #
-#   5. 继续下一阶段 (如果还有)
+#   5. 写入成功信息 (set):
+#      - 更新 result 保留变量，后续阶段可读可写
 #
-# 全部阶段完成 → 返回成功
+#   6. critical 追踪:
+#      - 若阶段标记 critical: true 且执行成功 → 记录 executedCritical
+#      - 全部阶段完成后，若存在 critical 但全部被跳过 → 返回失败
+#
+# 全部阶段完成 → 返回成功 + result 成功信息
 
 
 # ============================================================
-# 五、示例: 简单投喂 (单阶段)
+# 七、示例: 简单投喂 (单阶段，向后兼容旧写法)
 # ============================================================
-# 最简单的配置，直接发送投喂请求
 
-name: "简单投喂器"
-env:
-  API_URL: "https://feeder.example.com"
-  API_KEY: "my-secret-key"
-
-stages:
-  - name: "投喂"
-    request:
-      url: "{{API_URL}}/feed"
-      method: POST
-      headers:
-        Authorization: "Bearer {{API_KEY}}"
-        Content-Type: "application/json"
-      body:
-        device: "feeder-001"
-        amount: "{{amount}}"
-    validate:
-      - field: "code"
-        equals: 200
-        error: "投喂失败，请稍后重试"
-
-
-# ============================================================
-# 六、示例: 带预检查的智能投喂 (多阶段)
-# ============================================================
-# 先检查设备状态和余量，全部通过后再执行投喂
-
-name: "智能投喂器"
-description: "带状态检查和余量验证的多阶段投喂流程"
-
-env:
-  BASE_URL: "https://smart-feeder.example.com/api"
-  TOKEN: "your-api-token"
-  DEVICE: "feeder-001"
-
-stages:
-  # ── 阶段1: 检查设备是否在线 ──
-  - name: "检查设备状态"
-    request:
-      url: "{{BASE_URL}}/device/{{DEVICE}}/status"
-      method: GET
-      headers:
-        Authorization: "Bearer {{TOKEN}}"
-    validate:
-      - field: "status"
-        equals: "online"
-        error: "设备离线，暂时无法投喂"
-    extract:
-      firmware: "firmware_version"    # 提取固件版本，后续阶段可用
-      signal: "signal_strength"       # 提取信号强度
-
-  # ── 阶段2: 检查投喂器余量 ──
-  - name: "检查余量"
-    request:
-      url: "{{BASE_URL}}/device/{{DEVICE}}/capacity"
-      method: GET
-      headers:
-        Authorization: "Bearer {{TOKEN}}"
-    validate:
-      - field: "remaining"
-        gte: 1
-        error: "投喂器余量不足，请联系管理员补充"
-    extract:
-      remaining: "remaining"          # 提取剩余量
-
-  # ── 阶段3: 检查冷却时间 ──
-  - name: "检查冷却时间"
-    request:
-      url: "{{BASE_URL}}/device/{{DEVICE}}/last-feed"
-      method: GET
-      headers:
-        Authorization: "Bearer {{TOKEN}}"
-    validate:
-      - field: "seconds_since_last"
-        gte: 300
-        error: "距离上次投喂时间太短，请 5 分钟后再试"
-
-  # ── 阶段4: 执行投喂 ──
-  - name: "执行投喂"
-    request:
-      url: "{{BASE_URL}}/device/{{DEVICE}}/feed"
-      method: POST
-      headers:
-        Authorization: "Bearer {{TOKEN}}"
-        Content-Type: "application/json"
-        X-Firmware: "{{firmware}}"     # 引用阶段1提取的固件版本
-      body:
-        device_id: "{{DEVICE}}"
-        amount: "{{amount}}"
-        remaining_before: "{{remaining}}"  # 引用阶段2提取的剩余量
-    validate:
-      - field: "success"
-        equals: true
-        error: "投喂指令发送失败，请稍后重试"
-    extract:
-      feed_id: "feed_id"              # 提取投喂记录 ID
-
-
-# ============================================================
-# 七、示例: 带条件判断的复杂流程
-# ============================================================
-# 根据设备状态决定不同行为
-
-name: "条件判断投喂器"
-
-env:
-  API: "https://complex-feeder.example.com"
-  KEY: "secret"
-
-stages:
-  - name: "获取设备完整状态"
-    request:
-      url: "{{API}}/device/status"
-      method: GET
-      headers:
-        X-API-Key: "{{KEY}}"
-    extract:
-      mode: "data.mode"
-      battery: "data.battery"
-      food_level: "data.food_level"
-
-  - name: "检查电量"
-    request:
-      url: "{{API}}/check"           # 有些阶段可以发一个轻量请求
-      method: GET                     # 仅用于触发验证
-    validate:
-      - field: "battery"              # 注意: 这里验证的是上一阶段提取的变量
-        gte: 20                       # 但 validate 作用于当前响应
-        error: "设备电量过低 ({{battery}}%)，请先充电"
-        # 注: error 消息中也可以使用变量
-
-  - name: "执行投喂"
-    request:
-      url: "{{API}}/feed"
-      method: POST
-      headers:
-        X-API-Key: "{{KEY}}"
-        Content-Type: "application/json"
-      body:
-        mode: "{{mode}}"              # 使用阶段1提取的模式
-        amount: "{{amount}}"
-    validate:
-      - field: "result"
-        not_equals: "error"
-        error: "投喂执行异常"
+# name: "简单投喂器"
+# env:
+#   API_URL: "https://feeder.example.com"
+#   API_KEY: "my-secret-key"
+# stages:
+#   - name: "投喂"
+#     request:
+#       url: "{{API_URL}}/feed"
+#       method: POST
+#       headers:
+#         Authorization: "Bearer {{API_KEY}}"
+#       body:
+#         device: "feeder-001"
+#         amount: "{{amount}}"
+#     validate:                  # 旧版平铺数组写法，自动按 AND 处理
+#       - field: "code"
+#         equals: 200
+#         error: "投喂失败"
 
 
 # ============================================================
@@ -270,27 +274,21 @@ stages:
 # ============================================================
 #
 # Q: 如何调试配置?
-# A: 投喂失败时，服务端日志会记录失败阶段的完整请求和响应，
-#    查看 Docker 日志或 Vercel Functions 日志即可排查。
+# A: 投喂失败时，服务端日志会记录失败阶段的完整请求和响应。
 #
-# Q: 超时时间是多少?
-# A: 每个阶段的请求超时为 10 秒。
+# Q: set 里怎么引用响应字段?
+# A: 必须用 {{...}} 包裹，如 feed_id: "{{body.feed_id}}"。
+#    裸字符串 "body.feed_id" 会被当字面量，不会自动取值。
+#    保存时引擎会检测疑似遗漏 {{}} 的写法并给出警告。
 #
-# Q: 某个阶段没有 validate，会怎样?
-# A: 跳过验证，直接进入下一阶段。如果是最后一个阶段则执行结束。
+# Q: critical 标记有什么用?
+# A: 标记"这一步是真正的投喂动作"。如果所有 critical 阶段都被 when 跳过，
+#    引擎会返回失败，而不是误报成功。
 #
-# Q: extract 的变量名可以和 env 中的同名吗?
-# A: 可以，但阶段提取的变量会覆盖 env 中的同名变量。
+# Q: 超时时间怎么算?
+# A: 每个阶段独立超时(默认 10s)，同时受 max_duration 全局时间预算约束。
+#    引擎会在每次请求前检查剩余预算，自动压缩单次超时。
 #
-# Q: body 中如何传递数组?
-# A: YAML 原生支持数组语法:
-#    body:
-#      items:
-#        - "item1"
-#        - "item2"
-#
-# Q: 如何发送 form-urlencoded 请求?
-# A: 在 headers 中指定 Content-Type:
-#    headers:
-#      Content-Type: "application/x-www-form-urlencoded"
-#    body: "key1=value1&key2=value2"
+# Q: 旧配置还能用吗?
+# A: 完全兼容。旧的平铺 validate 数组、extract 简写、无 critical/when/set 的配置
+#    都能正常运行，行为与 v1 一致。

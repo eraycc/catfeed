@@ -124,7 +124,12 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "投喂器未配置 YAML 规则" }, { status: 400 })
       }
       const config = parseYamlConfig(feeder.yamlConfig)
-      const result = await executeStages(config.stages, config.env || {}, { amount: "1" })
+      const result = await executeStages(
+        config.stages,
+        config.env || {},
+        { amount: "1" },
+        { defaults: config.defaults, maxDuration: config.max_duration }
+      )
       if (!result.success) {
         return NextResponse.json({ error: result.error }, { status: 400 })
       }
