@@ -14,6 +14,8 @@ interface Camera {
   status: string
   community: { name: string }
   communityId: string
+  feederId: string | null
+  feeder: { id: string; name: string } | null
 }
 
 interface Community {
@@ -21,19 +23,28 @@ interface Community {
   name: string
 }
 
+interface Feeder {
+  id: string
+  name: string
+  communityId: string
+}
+
 export default function CamerasPage() {
   const [data, setData] = useState<Camera[]>([])
   const [communities, setCommunities] = useState<Community[]>([])
+  const [feeders, setFeeders] = useState<Feeder[]>([])
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Camera | null>(null)
 
   const fetchData = async () => {
-    const [camerasRes, communitiesRes] = await Promise.all([
+    const [camerasRes, communitiesRes, feedersRes] = await Promise.all([
       fetch("/api/admin/cameras"),
       fetch("/api/admin/communities"),
+      fetch("/api/admin/feeders"),
     ])
     setData(await camerasRes.json())
     setCommunities(await communitiesRes.json())
+    setFeeders(await feedersRes.json())
   }
 
   useEffect(() => { fetchData() }, [])
@@ -58,7 +69,16 @@ export default function CamerasPage() {
         { value: "MAINTENANCE", label: "维护中" },
       ],
     },
-  ], [communities])
+    {
+      name: "feederId",
+      label: "绑定投喂器",
+      type: "select",
+      options: [
+        { value: "", label: "不绑定" },
+        ...feeders.map((f) => ({ value: f.id, label: `${f.name}` })),
+      ],
+    },
+  ], [communities, feeders])
 
   const handleSubmit = async (formData: Record<string, string | number | boolean | null>) => {
     const url = editing
@@ -79,7 +99,7 @@ export default function CamerasPage() {
   }
 
   const handleDelete = async (item: Camera) => {
-    if (!confirm(`确定删除 "${item.name}"？`)) return
+    if (!confirm(`确定删除 "${item.name}"？关联的投喂记录也会被删除。`)) return
     await fetch(`/api/admin/cameras/${item.id}`, { method: "DELETE" })
     toast.success("删除成功")
     fetchData()
@@ -88,6 +108,13 @@ export default function CamerasPage() {
   const columns: Column<Camera>[] = [
     { key: "name", label: "名称" },
     { key: "community", label: "社区", render: (item) => item.community.name },
+    {
+      key: "feeder",
+      label: "绑定投喂器",
+      render: (item) => item.feeder
+        ? <Badge variant="outline">{item.feeder.name}</Badge>
+        : <span className="text-xs text-muted-foreground">未绑定</span>,
+    },
     { key: "streamUrl", label: "流地址", render: (item) => <span className="text-xs truncate block max-w-[200px]">{item.streamUrl}</span> },
     {
       key: "status",
@@ -127,6 +154,7 @@ export default function CamerasPage() {
           streamUrl: editing.streamUrl,
           status: editing.status,
           communityId: editing.communityId,
+          feederId: editing.feederId || "",
         } : undefined}
         onSubmit={handleSubmit}
       />

@@ -19,6 +19,7 @@ export async function PUT(
         name: data.name,
         streamUrl: data.streamUrl,
         status: data.status,
+        feederId: data.feederId !== undefined ? (data.feederId || null) : undefined,
       },
     })
     return NextResponse.json(camera)
@@ -34,6 +35,8 @@ export async function DELETE(
     if (error) return error
 
     const { id } = await params
+    // 先删除关联的投喂记录，再删除摄像头
+    await db.feedLog.deleteMany({ where: { cameraId: id } })
     await db.camera.delete({ where: { id } })
     return NextResponse.json({ success: true })
   })

@@ -5,7 +5,10 @@ import { requireAdmin, apiHandler } from "@/lib/api-helpers"
 export async function GET() {
   return apiHandler(async () => {
     const cameras = await db.camera.findMany({
-      include: { community: { select: { name: true } } },
+      include: {
+        community: { select: { name: true } },
+        feeder: { select: { id: true, name: true } },
+      },
       orderBy: { createdAt: "desc" },
     })
     return NextResponse.json(cameras)
@@ -24,6 +27,7 @@ export async function POST(req: Request) {
         name: data.name,
         streamUrl: data.streamUrl,
         status: data.status || "OFFLINE",
+        feederId: data.feederId || null,
       },
     })
     return NextResponse.json(camera)

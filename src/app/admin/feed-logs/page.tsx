@@ -27,6 +27,7 @@ export default function FeedLogsPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [loading, setLoading] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -42,10 +43,11 @@ export default function FeedLogsPage() {
   }, [page, pageSize])
 
   useEffect(() => { fetchData() }, [fetchData])
+  // 翻页时清空选择
+  useEffect(() => { setSelectedIds(new Set()) }, [page, pageSize])
 
   const handleDeleteSingle = async (item: FeedLog) => {
     if (!confirm(`确定删除该条投喂记录？`)) return
-
     try {
       const res = await fetch("/api/admin/feed-logs", {
         method: "DELETE",
@@ -55,6 +57,26 @@ export default function FeedLogsPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       toast.success("删除成功")
+      setSelectedIds(new Set())
+      fetchData()
+    } catch (e: any) {
+      toast.error("删除失败", { description: e.message })
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+    if (!confirm(`确定删除选中的 ${selectedIds.size} 条记录？`)) return
+    try {
+      const res = await fetch("/api/admin/feed-logs", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      toast.success(`成功删除 ${data.deleted} 条记录`)
+      setSelectedIds(new Set())
       fetchData()
     } catch (e: any) {
       toast.error("删除失败", { description: e.message })
@@ -81,16 +103,25 @@ export default function FeedLogsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">投喂记录</h1>
+        {selectedIds.size > 0 && (
+          <Button variant="destructive" onClick={handleBulkDelete}>
+            删除选中 ({selectedIds.size})
+          </Button>
+        )}
       </div>
 
       <div className="mb-3 text-sm text-muted-foreground">
         共 {total} 条记录，第 {page}/{totalPages} 页
+        {selectedIds.size > 0 && <span className="ml-2 text-primary">已选 {selectedIds.size} 条</span>}
       </div>
 
       <DataTable
         columns={columns}
         data={data}
         onDelete={handleDeleteSingle}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
       />
 
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-4 gap-3">

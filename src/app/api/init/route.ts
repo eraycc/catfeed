@@ -11,6 +11,7 @@ export async function POST() {
       await db.$executeRawUnsafe(`ALTER TYPE "FeederType" ADD VALUE IF NOT EXISTS 'YAML'`)
       await db.$executeRawUnsafe(`ALTER TABLE cf_feeders ADD COLUMN IF NOT EXISTS http_config TEXT`)
       await db.$executeRawUnsafe(`ALTER TABLE cf_feeders ADD COLUMN IF NOT EXISTS yaml_config TEXT`)
+      await db.$executeRawUnsafe(`ALTER TABLE cf_cameras ADD COLUMN IF NOT EXISTS feeder_id TEXT`)
       results.push("Schema synced")
     } catch (e: any) {
       console.error("[init] Schema sync failed:", e.message)

@@ -26,6 +26,7 @@ export default async function LivePage({ params }: Props) {
           feeders: true,
         },
       },
+      feeder: true,
     },
   })
 
@@ -33,7 +34,8 @@ export default async function LivePage({ params }: Props) {
     notFound()
   }
 
-  const feeder = camera.community.feeders[0] || null
+  // 优先使用摄像头绑定的投喂器，否则取社区下第一个
+  const feeder = camera.feeder || camera.community.feeders[0] || null
 
   // 获取系统配置
   const maxFeedConfig = await db.systemConfig.findUnique({

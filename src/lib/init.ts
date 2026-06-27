@@ -273,6 +273,9 @@ async function syncSchema(prisma: any) {
   await prisma.$executeRawUnsafe(`ALTER TABLE cf_feeders ADD COLUMN IF NOT EXISTS http_config TEXT`)
   await prisma.$executeRawUnsafe(`ALTER TABLE cf_feeders ADD COLUMN IF NOT EXISTS yaml_config TEXT`)
 
+  // 3.5 确保 cf_cameras 表有 feeder_id 列（摄像头绑定投喂器）
+  await prisma.$executeRawUnsafe(`ALTER TABLE cf_cameras ADD COLUMN IF NOT EXISTS feeder_id TEXT`)
+
   // 4. 确保索引存在
   const indexes = [
     { name: "idx_cf_feed_logs_user_id", sql: `CREATE INDEX IF NOT EXISTS idx_cf_feed_logs_user_id ON cf_feed_logs(user_id)` },
