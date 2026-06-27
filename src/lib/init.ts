@@ -264,12 +264,16 @@ async function syncSchema(prisma: any) {
     }
   }
 
-  // 2. 确保 cf_feeders 表有 http_config 和 yaml_config 列（兼容旧数据库）
+  // 2. 更新 FeederType 枚举：添加 HTTP 和 YAML（兼容旧数据库）
+  await prisma.$executeRawUnsafe(`ALTER TYPE "FeederType" ADD VALUE IF NOT EXISTS 'HTTP'`)
+  await prisma.$executeRawUnsafe(`ALTER TYPE "FeederType" ADD VALUE IF NOT EXISTS 'YAML'`)
+
+  // 3. 确保 cf_feeders 表有 http_config 和 yaml_config 列（兼容旧数据库）
   // 使用 IF NOT EXISTS 避免并发请求导致 "column already exists" 错误
   await prisma.$executeRawUnsafe(`ALTER TABLE cf_feeders ADD COLUMN IF NOT EXISTS http_config TEXT`)
   await prisma.$executeRawUnsafe(`ALTER TABLE cf_feeders ADD COLUMN IF NOT EXISTS yaml_config TEXT`)
 
-  // 3. 确保索引存在
+  // 4. 确保索引存在
   const indexes = [
     { name: "idx_cf_feed_logs_user_id", sql: `CREATE INDEX IF NOT EXISTS idx_cf_feed_logs_user_id ON cf_feed_logs(user_id)` },
     { name: "idx_cf_feed_logs_camera_id", sql: `CREATE INDEX IF NOT EXISTS idx_cf_feed_logs_camera_id ON cf_feed_logs(camera_id)` },

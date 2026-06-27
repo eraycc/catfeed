@@ -5,8 +5,10 @@ export async function POST() {
   try {
     const results: string[] = []
 
-    // 1. 同步 schema：添加缺失的列（IF NOT EXISTS 避免并发冲突）
+    // 1. 同步 schema：更新枚举 + 添加缺失的列（IF NOT EXISTS 避免并发冲突）
     try {
+      await db.$executeRawUnsafe(`ALTER TYPE "FeederType" ADD VALUE IF NOT EXISTS 'HTTP'`)
+      await db.$executeRawUnsafe(`ALTER TYPE "FeederType" ADD VALUE IF NOT EXISTS 'YAML'`)
       await db.$executeRawUnsafe(`ALTER TABLE cf_feeders ADD COLUMN IF NOT EXISTS http_config TEXT`)
       await db.$executeRawUnsafe(`ALTER TABLE cf_feeders ADD COLUMN IF NOT EXISTS yaml_config TEXT`)
       results.push("Schema synced")
