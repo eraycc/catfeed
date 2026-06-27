@@ -21,11 +21,7 @@ export default async function LivePage({ params }: Props) {
   const camera = await db.camera.findUnique({
     where: { id: cameraId },
     include: {
-      community: {
-        include: {
-          feeders: true,
-        },
-      },
+      community: true,
       feeder: true,
     },
   })
@@ -34,8 +30,8 @@ export default async function LivePage({ params }: Props) {
     notFound()
   }
 
-  // 优先使用摄像头绑定的投喂器，否则取社区下第一个
-  const feeder = camera.feeder || camera.community.feeders[0] || null
+  // 直接使用摄像头绑定的投喂器
+  const feeder = camera.feeder
 
   // 获取系统配置
   const maxFeedConfig = await db.systemConfig.findUnique({

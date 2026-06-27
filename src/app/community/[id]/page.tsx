@@ -16,7 +16,9 @@ export default async function CommunityPage({ params }: Props) {
   const community = await db.community.findUnique({
     where: { id },
     include: {
-      cameras: true,
+      cameras: {
+        include: { feeder: true },
+      },
       feeders: true,
     },
   })
@@ -54,18 +56,15 @@ export default async function CommunityPage({ params }: Props) {
 
         <h2 className="text-lg font-semibold mb-4">摄像头列表</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {community.cameras.map((camera) => {
-            const feeder = community.feeders[0] || null
-            return (
-              <CameraCard
-                key={camera.id}
-                id={camera.id}
-                name={camera.name}
-                status={camera.status}
-                feederName={feeder?.name || null}
-              />
-            )
-          })}
+          {community.cameras.map((camera) => (
+            <CameraCard
+              key={camera.id}
+              id={camera.id}
+              name={camera.name}
+              status={camera.status}
+              feederName={camera.feeder?.name || null}
+            />
+          ))}
         </div>
 
         {community.cameras.length === 0 && (
